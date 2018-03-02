@@ -24,7 +24,7 @@ class QNetwork():
 
 	def save_model_weights(self, suffix):
 		# Helper function to save your model / weights. 
-		self.model.save_weights(suffix)
+		self.model.save_weights(suffix + ".h5")
 		
 	def load_model(self, model_file):
 		# Helper function to load an existing model.
@@ -46,16 +46,23 @@ class Replay_Memory():
 		# Burn in episodes define the number of episodes that are written into the memory from the 
 		# randomly initialized agent. Memory size is the maximum size after which old elements in the memory are replaced. 
 		# A simple (if not the most efficient) was to implement the memory is as a list of transitions. 
-		pass
+		self.burn_in = burn_in
+		self.memory_size = memory_size
+		self.experience = collections.deque()
+		self.batch = []
 
 	def sample_batch(self, batch_size=32):
 		# This function returns a batch of randomly sampled transitions - i.e. state, action, reward, next state, terminal flag tuples. 
 		# You will feed this to your model to train.
-		pass
+		indices = np.random.randint(0,self.memory_size,batch_size)
+		self.batch = [self.experience[i] for i in indices]
+		
 
 	def append(self, transition):
 		# Appends transition to the memory. 	
-		pass
+		if(len(self.experience)>self.memory_size):
+			self.experience.popleft()
+		self.experience.append(transition)
 
 class DQN_Agent():
 
@@ -78,21 +85,21 @@ class DQN_Agent():
 
 		self.env = env
 		self.replay = replay
+		self.replay_mem = Replay_Memory()
 		self.render = render
 		self.feature_size = env.observation_space.shape[0]
 		self.action_size = env.action_space.n
 		
-		self.discount_factor = 1
+		self.discount_factor = 0.99
 		self.train_iters = 1000000
 		self.epsilon = 0.5
+		self.epsilon_min = 0.05
 		self.num_episodes = 3000
-		# self.epsilon_decay = float(0.65/self.train_iters)
-		self.epsilon_decay = 0.99
-		self.update_epsilon_iters = 250
-		self.update_prediction_net_iters = 1
-		self.avg_rew_buf_size_epi = 5
+		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/100000)
+		# self.update_prediction_net_iters = 1
+		self.avg_rew_buf_size_epi = 10
 		self.save_weights_iters = 1000
-		self.print_epi = 1
+		self.print_epi = 5
 
 	def epsilon_greedy_policy(self, q_values):
 		# Creating epsilon greedy probabilities to sample from.             
@@ -103,7 +110,7 @@ class DQN_Agent():
 
 	def greedy_policy(self, q_values):
 		# Creating greedy policy for test time. 
-		pass
+		return np.argmax(q_values[0])
 
 	def train(self):
 		# In this function, we will train our network. 
@@ -115,25 +122,24 @@ class DQN_Agent():
 		reward_buf = collections.deque()
 		
 		if(self.replay==False):
-			# while(True):
-			for e in range(self.num_episodes):
+			while(True):
+			# for e in range(self.num_episodes):
 				# time.sleep(1)
 				curr_reward = 0
 				curr_state = self.env.reset()
 				curr_state = curr_state.reshape([1,self.feature_size])
-				curr_action = self.epsilon_greedy_policy(self.prediction_net.model.predict(curr_state))
+				curr_action = self.epsilon_greedy_policy(self.net.model.predict(curr_state))
 
-				# while(iters<self.train_iters):
-				while(True):
+				while(iters<self.train_iters):
+				# while(True):
 					self.env.render()
 					nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
 					curr_reward += reward
 					
-					truth = np.zeros(shape=[1,self.action_size])
+					# truth = np.zeros(shape=[1,self.action_size])
 					
-					##### changed #####
-					# if(is_terminal == True):
-					if(nextstate[0]>=0.5):
+					if(is_terminal == True):
+					# if(nextstate[0]>=0.5):
 						# print(is_terminal, reward, bool(nextstate[0]>=0.6))
 						q_target = reward
 						truth = self.net.model.predict(curr_state)
@@ -142,7 +148,7 @@ class DQN_Agent():
 						break
 					
 					nextstate = nextstate.reshape([1,self.feature_size])
-					q_nextstate = self.prediction_net.model.predict(nextstate)
+					q_nextstate = self.net.model.predict(nextstate)
 					nextaction = self.epsilon_greedy_policy(q_nextstate)
 					q_target = reward + self.discount_factor*q_nextstate[0][nextaction]
 
@@ -156,19 +162,16 @@ class DQN_Agent():
 
 					iters += 1
 
-					if(iters%self.update_epsilon_iters==0):
-						self.epsilon *= self.epsilon_decay
-						self.epsilon = max(self.epsilon, 0.05)
-					if(iters%self.update_prediction_net_iters == 0):
-						self.prediction_net.load_model_weights(self.net.model.get_weights())
 					# if(iters%self.save_weights_iters==0):
-						# self.net.save_model_weights(weights)
-					print(self.epsilon, iters)
-				
+					# 	self.net.save_model_weights(backup)
+					# print(self.epsilon, iters, curr_episode, curr_reward)
+					
+					self.epsilon -= self.epsilon_decay
+					self.epsilon = max(self.epsilon, 0.05)
 				###end of episode##	
 				
-				###rewards
-				
+				# self.prediction_net.load_model_weights(self.net.model.get_weights())
+
 				max_reward = max(max_reward, curr_reward)
 
 				if(len(reward_buf)>self.avg_rew_buf_size_epi):
@@ -177,7 +180,7 @@ class DQN_Agent():
 				avg_reward = sum(reward_buf)/len(reward_buf)
 				
 				if(curr_episode%self.print_epi==0):
-					print(curr_episode, iters, curr_reward, avg_reward, self.epsilon)	
+					print(curr_episode, iters, self.epsilon ,avg_reward)	
 				curr_episode += 1
 
 		# If you are using a replay memory, you should interact with environment here, and store these 
@@ -190,10 +193,15 @@ class DQN_Agent():
 		# Here you need to interact with the environment, irrespective of whether you are using a memory. 
 		pass
 
-	def burn_in_memory():
+	def burn_in_memory(self):
 		# Initialize your replay memory with a burn_in number of episodes / transitions. 
-
-		pass
+		curr_mem_size = 0
+		while(curr_mem_size<self.replay_mem.burn_in):
+			state = self.env.reset()
+			action = self.epsilon_greedy_policy(self.net.model.predict(curr_state))
+			nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
+			self.replay_mem.append([state,action,reward,nextstate,is_terminal])
+			curr_mem_size += 1
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(description='Deep Q Network Argument Parser')
