@@ -18,13 +18,19 @@ class QNetwork():
 		self.learning_rate = 0.0001
 
 		self.model = Sequential()
-		self.model.add(Dense(env.action_space.n, input_dim = env.observation_space.shape[0], kernel_initializer='he_uniform'))
+		self.model.add(Dense(32, input_dim = env.observation_space.shape[0], kernel_initializer='he_uniform'))
+		self.model.add(Activation('relu'))
+		# self.model.add(Dropout(0.5))
+		self.model.add(Dense(32, input_dim = 32, kernel_initializer='he_uniform'))
+		self.model.add(Activation('relu'))
+		# self.model.add(Dropout(0.5))
+		self.model.add(Dense(env.action_space.n, input_dim = 32, kernel_initializer='he_uniform'))
 		self.model.add(Activation('linear'))
 		self.model.compile(optimizer = Adam(lr=self.learning_rate), loss='mse')
 
 	def save_model_weights(self, suffix):
 		# Helper function to save your model / weights.
-		self.model.save_weights(suffix + ".h5")
+		self.model.save_weights(suffix)
 
 	def load_model(self, model_file):
 		# Helper function to load an existing model.
@@ -61,8 +67,9 @@ class Replay_Memory():
 	def append(self, transition):
 		# Appends transition to the memory.
 		if(len(self.experience)>self.memory_size):
-			self.experience.popleft()
+			pop = self.experience.popleft()
 		self.experience.append(transition)
+
 
 class DQN_Agent():
 
@@ -75,7 +82,7 @@ class DQN_Agent():
 	# (4) Create a function to test the Q Network's performance on the environment.
 	# (5) Create a function for Experience Replay.
 
-	def __init__(self, env, replay=False, render=False):
+	def __init__(self, env, render=False):
 
 		# Create an instance of the network itself, as well as the memory.
 		# Here is also a good place to set environmental parameters,
@@ -84,25 +91,19 @@ class DQN_Agent():
 		self.prediction_net = QNetwork(env)
 
 		self.env = env
-		self.replay = replay
 		self.replay_mem = Replay_Memory()
 		self.render = render
 		self.feature_size = env.observation_space.shape[0]
 		self.action_size = env.action_space.n
-		self.discount_factor = 1
-		
-		if(env == "CartPole-v0"):
-			self.discount_factor = 0.99
-		elif(env == "MountainCar-v0"):
-			self.discount_factor = 1
 
+		self.discount_factor = 0.99
 		self.train_iters = 1000000
 		self.epsilon = 0.5
 		self.epsilon_min = 0.05
 		self.num_episodes = 3000
 		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/100000)
 		# self.update_prediction_net_iters = 1
-		self.avg_rew_buf_size_epi = 5
+		self.avg_rew_buf_size_epi = 10
 		self.save_weights_iters = 1000
 		self.save_model_iters = 2000
 		self.print_epi = 1
@@ -127,140 +128,76 @@ class DQN_Agent():
 		max_reward = 0
 		reward_buf = collections.deque()
 
-		if(self.replay==False):
-			while(True):
-			# for e in range(self.num_episodes):
-				curr_reward = 0
-				curr_state = self.env.reset()
-				curr_state = curr_state.reshape([1,self.feature_size])
-				curr_action = self.epsilon_greedy_policy(self.net.model.predict(curr_state))
+		self.burn_in_memory()
 
-				while(iters<self.train_iters):
-				# while(True):
-					self.env.render()
-					nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
-					curr_reward += reward
+		# for e in range(self.num_episodes):
+		while(True):
+			curr_reward = 0
+			curr_state = self.env.reset()
+			curr_state = curr_state.reshape([1,self.feature_size])
+			curr_action = self.epsilon_greedy_policy(self.net.model.predict(curr_state))
 
-					# truth = np.zeros(shape=[1,self.action_size])
+			# while(True):
+			while(iters<self.train_iters):
+				# print(len(self.replay_mem.experience))
+				self.env.render()
+				nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
+				self.replay_mem.append([curr_state,curr_action,reward,nextstate,is_terminal])
 
-					if(is_terminal == True):
-					# if(nextstate[0]>=0.5):
-						# print(is_terminal, reward, bool(nextstate[0]>=0.6))
-						q_target = reward
-						truth = self.net.model.predict(curr_state)
-						truth[0][curr_action] = q_target
-						self.net.model.fit(curr_state,truth,epochs=1,verbose=0)
-						break
+				curr_reward += reward
+				if(is_terminal):
+					break
 
-					nextstate = nextstate.reshape([1,self.feature_size])
-					q_nextstate = self.net.model.predict(nextstate)
-					nextaction = self.epsilon_greedy_policy(q_nextstate)
-					q_target = reward + self.discount_factor*np.amax(q_nextstate)
+				self.replay_mem.sample_batch()
+				input_state = np.zeros(shape=[len(self.replay_mem.batch),self.feature_size])
+				truth = np.zeros(shape=[len(self.replay_mem.batch),self.action_size])
+				for i in range(len(self.replay_mem.batch)):
+					state_t,action_t,reward_t,nextstate_t,_ = self.replay_mem.batch[i]
 
-					truth = self.net.model.predict(curr_state)
-					truth[0][curr_action] = q_target
+					nextstate_t = nextstate_t.reshape([1,self.feature_size])
+					state_t = state_t.reshape([1,self.feature_size])
 
-					self.net.model.fit(curr_state,truth,epochs=1,verbose=0)
+					input_state[i] = state_t
+					if(self.replay_mem.batch[i][4]==True):
+						truth[i] = self.prediction_net.model.predict(state_t)
+						truth[i][action_t] = reward_t
+					else:
+						q_target = reward_t + self.discount_factor*np.amax(self.prediction_net.model.predict(nextstate_t))
+						truth[i] = self.prediction_net.model.predict(state_t)
+						truth[i][action_t] = q_target
 
-					curr_state = nextstate
-					curr_action = nextaction
+				self.net.model.fit(input_state,truth,epochs=1,verbose=0,batch_size = len(self.replay_mem.batch))
 
-					iters += 1
+				nextstate = nextstate.reshape([1,self.feature_size])
+				q_nextstate = self.net.model.predict(nextstate)
+				nextaction = self.epsilon_greedy_policy(q_nextstate)
+				curr_state = nextstate
+				curr_action = nextaction
 
-					# if(iters%self.save_weights_iters==0):
-					# 	self.net.save_model_weights(backup)
-					if(iters%self.save_model_iters==0):
-						self.net.model.save('cartpole_model_backup_deep_noreplay.h5')
-					# print(self.epsilon, iters, curr_episode, curr_reward)
+				iters += 1
 
-					self.epsilon -= self.epsilon_decay
-					self.epsilon = max(self.epsilon, 0.05)
-				###end of episode##
+				# if(iters%self.save_weights_iters==0):
+				# 	self.net.save_model_weights(backup)
+				if(iters%self.save_model_iters==0):
+					self.net.model.save('cartpole3x32_drop1_model_backup_deep_replay.h5')
 
-				# self.prediction_net.load_model_weights(self.net.model.get_weights())
+				# print(self.epsilon, iters, curr_episode, curr_reward)
+				self.epsilon -= self.epsilon_decay
+				self.epsilon = max(self.epsilon, 0.05)
+			###end of episode##
 
-				max_reward = max(max_reward, curr_reward)
+			self.prediction_net.load_model_weights(self.net.model.get_weights())
 
-				if(len(reward_buf)>self.avg_rew_buf_size_epi):
-					reward_buf.popleft()
-				reward_buf.append(curr_reward)
-				avg_reward = sum(reward_buf)/len(reward_buf)
+			max_reward = max(max_reward, curr_reward)
 
-				if(curr_episode%self.print_epi==0):
-					print(curr_episode, iters, self.epsilon ,avg_reward)
-				curr_episode += 1
+			if(len(reward_buf)>self.avg_rew_buf_size_epi):
+				reward_buf.popleft()
+			reward_buf.append(curr_reward)
+			avg_reward = sum(reward_buf)/len(reward_buf)
 
-		# If you are using a replay memory, you should interact with environment here, and store these
-		# transitions to memory, while also updating your model.
-		elif(self.replay):
-
-			self.burn_in_memory()
-
-			# for e in range(self.num_episodes):
-			while(True):
-				curr_reward = 0
-				curr_state = self.env.reset()
-				curr_state = curr_state.reshape([1,self.feature_size])
-				curr_action = self.epsilon_greedy_policy(self.net.model.predict(curr_state))
-
-				# while(True):
-				while(iters<self.train_iters):
-					self.env.render()
-					nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
-					self.replay_mem.append([curr_state,curr_action,reward,nextstate,is_terminal])
-
-					curr_reward += reward
-					if(is_terminal):
-						break
-					# print(len(self.replay_mem.experience))
-
-					self.replay_mem.sample_batch()
-					input_state = np.zeros(shape=[len(self.replay_mem.batch),self.feature_size])
-					truth = np.zeros(shape=[len(self.replay_mem.batch),self.action_size])
-					for i in range(len(self.replay_mem.batch)):
-						state_t,action_t,reward_t,nextstate_t,_ = self.replay_mem.batch[i]
-
-						nextstate_t = nextstate_t.reshape([1,self.feature_size])
-						state_t = state_t.reshape([1,self.feature_size])
-
-						input_state[i] = state_t
-						if(self.replay_mem.batch[i][4]==True):
-							truth[i] = self.prediction_net.model.predict(state_t)
-							truth[i][action_t] = reward_t
-						else:
-							q_target = reward_t + self.discount_factor*np.amax(self.prediction_net.model.predict(nextstate_t))
-							truth[i] = self.prediction_net.model.predict(state_t)
-							truth[i][action_t] = q_target
-
-					self.net.model.fit(input_state,truth,epochs=1,verbose=0,batch_size = len(self.replay_mem.batch))
-
-					nextstate = nextstate.reshape([1,self.feature_size])
-					q_nextstate = self.net.model.predict(nextstate)
-					nextaction = self.epsilon_greedy_policy(q_nextstate)
-					curr_state = nextstate
-					curr_action = nextaction
-
-					iters += 1
-
-					# if(iters%self.save_weights_iters==0):
-					# 	self.net.save_model_weights(backup)
-					# print(self.epsilon, iters, curr_episode, curr_reward)
-					self.epsilon -= self.epsilon_decay
-					self.epsilon = max(self.epsilon, 0.05)
-				###end of episode##
-
-				self.prediction_net.load_model_weights(self.net.model.get_weights())
-
-				max_reward = max(max_reward, curr_reward)
-
-				if(len(reward_buf)>self.avg_rew_buf_size_epi):
-					reward_buf.popleft()
-				reward_buf.append(curr_reward)
-				avg_reward = sum(reward_buf)/len(reward_buf)
-
-				if(curr_episode%self.print_epi==0):
-					print(curr_episode, iters, self.epsilon ,avg_reward)
-				curr_episode += 1
+			if(curr_episode%self.print_epi==0):
+				print(curr_episode, iters, self.epsilon ,avg_reward)
+			curr_episode += 1
 
 	def test(self, model_file=None):
 		# Evaluate the performance of your agent over 100 episodes, by calculating cummulative rewards for the 100 episodes.
@@ -274,7 +211,7 @@ class DQN_Agent():
 		while(curr_mem_size<self.replay_mem.burn_in):
 			state = self.env.reset()
 			action = np.random.randint(self.action_size)
-			nextstate, reward, is_terminal, debug_info = self.env.step(action)
+			nextstate, reward, is_terminal, _ = self.env.step(action)
 			if(is_terminal==False):
 				self.replay_mem.append([state,action,reward,nextstate,is_terminal])
 				curr_mem_size += 1
@@ -286,7 +223,7 @@ def parse_arguments():
 	parser.add_argument('--render',dest='render',type=int,default=0)
 	parser.add_argument('--train',dest='train',type=int,default=1)
 	parser.add_argument('--model',dest='model_file',type=str)
-	parser.add_argument('--replay',dest='replay',type=str,default=False)
+	# parser.add_argument('--replay',dest='replay',type=str,default=False)
 	return parser.parse_args()
 
 
@@ -306,7 +243,7 @@ def main(args):
 	keras.backend.tensorflow_backend.set_session(sess)
 
 	# You want to create an instance of the DQN_Agent class here, and then train / test it.
-	agent = DQN_Agent(env, args.replay)
+	agent = DQN_Agent(env)
 	agent.train()
 
 
