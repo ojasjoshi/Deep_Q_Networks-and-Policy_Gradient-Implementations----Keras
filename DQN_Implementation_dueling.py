@@ -6,6 +6,8 @@ from keras.optimizers import Adam
 from keras import backend as K
 import collections
 import time
+from keras.utils import plot_model
+from keras.layers.normalization import BatchNormalization
 
 class QNetwork():
 
@@ -20,25 +22,33 @@ class QNetwork():
 		print("Setting up network....\n")
 
 		inp = Input(shape=(env.observation_space.shape[0],))
-		layer_shared1 = Dense(32,activation='relu',kernel_initializer='he_uniform')
-		layer_shared2 = Dense(32,activation='relu',kernel_initializer='he_uniform')
-		layers_shared = layer_shared2(layer_shared1(inp))
+		layer_shared1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(inp)
+		layer_shared1 = BatchNormalization()(layer_shared1)
+		layer_shared2 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared1)
+		layer_shared2 = BatchNormalization()(layer_shared2)
+		# layers_shared = layer_shared2(layer_shared1(inp))
 		print("Shared layers initialized....\n")
 
-		layer_v1 = Dense(32,activation='relu',kernel_initializer='he_uniform')
-		layer_a1 = Dense(32,activation='relu',kernel_initializer='he_uniform')
-		layer_v2 = Dense(1,activation='relu',kernel_initializer='he_uniform')
-		layer_a2 = Dense(env.action_space.n,activation='relu',kernel_initializer='he_uniform')
-		layer_v = layer_v2(layer_v1(layers_shared))
-		layer_a = layer_a2(layer_a1(layers_shared))
+		layer_v1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared2)
+		layer_v1 = BatchNormalization()(layer_v1)
+		layer_a1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared2)
+		layer_a1 = BatchNormalization()(layer_a1)
+		layer_v2 = Dense(1,activation='linear',kernel_initializer='he_uniform')(layer_v1)
+		# layer_v2 = BatchNormalization()(layer_v2)
+		layer_a2 = Dense(env.action_space.n,activation='linear',kernel_initializer='he_uniform')(layer_a1)
+		# layer_a2 = BatchNormalization()(layer_a2)
+		# layer_v = layer_v2(layer_v1(layers_shared))
+		# layer_a = layer_a2(layer_a1(layers_shared))
 		print("Value and Advantage Layers initialised....\n")
 
-		layer_q = Lambda(lambda x: x[0][:] + x[1][:] - K.mean(x[1][:]), output_shape=(env.action_space.n,))([layer_v, layer_a])
+		# layer_q = Lambda(lambda x: x[0][:] + x[1][:] - K.mean(x[1][:]), output_shape=(env.action_space.n,))([layer_v, layer_a])
+		layer_q = Lambda(lambda x: x[0][:] + x[1][:] - K.mean(x[1][:]), output_shape=(env.action_space.n,))([layer_v2, layer_a2])
+
 		print("Q-function layer initialized.... :)\nI")
 
 		self.model = Model(inp, layer_q)
 		self.model.compile(optimizer = Adam(lr=self.learning_rate), loss='mse')
-
+		plot_model(self.model, to_file='Dueling Double DQN.png', show_shapes = True)
 	def save_model_weights(self, suffix):
 		# Helper function to save your model / weights.
 		self.model.save_weights(suffix)
@@ -107,7 +117,7 @@ class DQN_Agent():
 		self.feature_size = env.observation_space.shape[0]
 		self.action_size = env.action_space.n
 
-		self.discount_factor = 0.99
+		self.discount_factor = 1
 		self.train_iters = 1000000
 		self.epsilon = 0.5
 		self.epsilon_min = 0.05
@@ -141,15 +151,15 @@ class DQN_Agent():
 
 		self.burn_in_memory()
 
-		# for e in range(self.num_episodes):
-		while(True):
+		for e in range(self.num_episodes):
+		# while(True):
 			curr_reward = 0
 			curr_state = self.env.reset()
 			curr_state = curr_state.reshape([1,self.feature_size])
 			curr_action = self.epsilon_greedy_policy(self.net.model.predict(curr_state))
 
-			# while(True):
-			while(iters<self.train_iters):
+			while(True):
+			# while(iters<self.train_iters):
 				# print(len(self.replay_mem.experience))
 				self.env.render()
 				nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)

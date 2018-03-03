@@ -5,6 +5,8 @@ from keras.layers import Dense, Activation, Dropout
 from keras.optimizers import Adam
 import collections
 import time
+from keras.utils import plot_model
+from keras.layers.normalization import BatchNormalization
 
 class QNetwork():
 
@@ -20,15 +22,22 @@ class QNetwork():
 		self.model = Sequential()
 		self.model.add(Dense(64, input_dim = env.observation_space.shape[0], kernel_initializer='he_uniform'))
 		self.model.add(Activation('relu'))
+		model.add(BatchNormalization())
 		# self.model.add(Dropout(0.5))
 		self.model.add(Dense(64, input_dim = 64, kernel_initializer='he_uniform'))
 		self.model.add(Activation('relu'))
+		model.add(BatchNormalization())
 		# self.model.add(Dropout(0.5))
 		self.model.add(Dense(64, input_dim = 64, kernel_initializer='he_uniform'))
 		self.model.add(Activation('relu'))
+		model.add(BatchNormalization())
+		# self.model.add(Dropout(0.5))
 		self.model.add(Dense(env.action_space.n, input_dim = 64, kernel_initializer='he_uniform'))
 		self.model.add(Activation('linear'))
+		model.add(BatchNormalization())
+
 		self.model.compile(optimizer = Adam(lr=self.learning_rate), loss='mse')
+		plot_model(self.model, to_file='DDQN.png', show_shapes = True)
 
 	def save_model_weights(self, suffix):
 		# Helper function to save your model / weights.
