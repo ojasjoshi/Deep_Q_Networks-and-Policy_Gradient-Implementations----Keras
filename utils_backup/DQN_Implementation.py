@@ -234,10 +234,10 @@ class DQN_Agent():
 							truth[i] = self.prediction_net.model.predict(state_t)
 							truth[i][action_t] = q_target
 
-					if(iters%self.print_loss_iters==0):
-						self.net.model.fit(input_state,truth,epochs=1,verbose=1,batch_size = len(self.replay_mem.batch))
-					else:
-						self.net.model.fit(input_state,truth,epochs=1,verbose=0,batch_size = len(self.replay_mem.batch))
+				if(iters%self.print_loss_iters==0):
+					self.net.model.fit(input_state,truth,epochs=1,verbose=1,batch_size = len(self.replay_mem.batch))
+				else:
+					self.net.model.fit(input_state,truth,epochs=1,verbose=0,batch_size = len(self.replay_mem.batch))
 
 					nextstate = nextstate.reshape([1,self.feature_size])
 					q_nextstate = self.net.model.predict(nextstate)
@@ -249,19 +249,15 @@ class DQN_Agent():
 
 					# if(iters%self.save_weights_iters==0):
 					# 	self.net.save_model_weights(backup)
+
+					self.epsilon -= self.epsilon_decay
+					self.epsilon = max(self.epsilon, 0.05)
 					
 					if(iters%self.save_model_iters==0):
 						if(env == "CartPole-v0"):
 							self.net.model.save('cp_BN_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
 						elif(env == "MountainCar-v0"):
 							self.net.model.save('mc_BN_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-
-					self.epsilon -= self.epsilon_decay
-					self.epsilon = max(self.epsilon, 0.05)
-
-					# if(iters%self.update_prediction_net_iters==0):
-					# 	self.prediction_net.load_model_weights(self.net.model.get_weights())
-					# 	self.net.visualise_weights()
 				###end of episode##
 
 				self.prediction_net.load_model_weights(self.net.model.get_weights())
@@ -272,7 +268,6 @@ class DQN_Agent():
 					reward_buf.popleft()
 				reward_buf.append(curr_reward)
 				avg_reward = sum(reward_buf)/len(reward_buf)
-
 
 				if(curr_episode%self.print_epi==0):
 					print(curr_episode, iters, self.epsilon ,avg_reward)

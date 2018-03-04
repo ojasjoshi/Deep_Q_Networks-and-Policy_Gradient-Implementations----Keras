@@ -5,8 +5,6 @@ from keras.layers import Dense, Activation, Dropout
 from keras.optimizers import Adam
 import collections
 import time
-from keras.utils import plot_model
-from keras.layers.normalization import BatchNormalization
 
 class QNetwork():
 
@@ -22,21 +20,15 @@ class QNetwork():
 		self.model = Sequential()
 		self.model.add(Dense(32, input_dim = env.observation_space.shape[0], kernel_initializer='he_uniform'))
 		self.model.add(Activation('relu'))
-		self.model.add(BatchNormalization())
 		# self.model.add(Dropout(0.5))
 		self.model.add(Dense(32, input_dim = 32, kernel_initializer='he_uniform'))
 		self.model.add(Activation('relu'))
-		self.model.add(BatchNormalization())
-		# self.model.add(Dropout(0.5))
+		self.model.add(Dropout(0.5))
 		self.model.add(Dense(32, input_dim = 32, kernel_initializer='he_uniform'))
 		self.model.add(Activation('relu'))
-		self.model.add(BatchNormalization())
-		# self.model.add(Dropout(0.5))
 		self.model.add(Dense(env.action_space.n, input_dim = 32, kernel_initializer='he_uniform'))
 		self.model.add(Activation('linear'))
-
 		self.model.compile(optimizer = Adam(lr=self.learning_rate), loss='mse')
-		plot_model(self.model, to_file='DDQN.png', show_shapes = True)
 
 	def save_model_weights(self, suffix):
 		# Helper function to save your model / weights.
@@ -50,12 +42,6 @@ class QNetwork():
 		# Helper funciton to load model weights.
 		# self.model.load_weights(weight_file)
 		self.model.set_weights(weight_file)
-
-	def visualise_weights(self):
-		print("Current Weights\n")
-		for layer in self.model.layers:
-			temp = layer.get_weights()
-			print(temp)
 
 
 class Replay_Memory():
@@ -107,28 +93,22 @@ class DQN_Agent():
 		self.prediction_net = QNetwork(env)
 
 		self.env = env
-		self.replay_mem = Replay_Memory()																	#HYPERPARAMETER2
+		self.replay_mem = Replay_Memory()
 		self.render = render
 		self.feature_size = env.observation_space.shape[0]
 		self.action_size = env.action_space.n
-		self.discount_factor = 1 	
 
-		if(env == "CartPole-v0"):
-			self.discount_factor = 0.99
-		elif(env == "MountainCar-v0"):
-			self.discount_factor = 1
-
+		self.discount_factor = 1
 		self.train_iters = 1000000
-		self.epsilon = 0.5 																					#HYPERPARAMETER3
-		self.epsilon_min = 0.05																				#HYPERPARAMETER4
-		self.num_episodes = 4000
-		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/100000)									#HYPERPARAMETER5
-		self.update_prediction_net_iters =500 																#HYPERPARAMETER6
-		self.avg_rew_buf_size_epi = 10 
-		self.save_weights_iters = 5000 
-		self.save_model_iters = 2000 															
-		self.print_epi = 1 
-		self.print_loss_iters = 2000 
+		self.epsilon = 0.5
+		self.epsilon_min = 0.05
+		self.num_episodes = 3000
+		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/250000)
+		# self.update_prediction_net_iters = 1
+		self.avg_rew_buf_size_epi = 10
+		self.save_weights_iters = 1000
+		self.save_model_iters = 2000
+		self.print_epi = 1
 
 	def epsilon_greedy_policy(self, q_values):
 		# Creating epsilon greedy probabilities to sample from.
@@ -152,15 +132,15 @@ class DQN_Agent():
 
 		self.burn_in_memory()
 
-		# while(iters<self.train_iters): 																	#uncomment for cartpole
-		for e in range(self.num_episodes): 																	#uncomment for mountaincar
+		for e in range(self.num_episodes):
+		# while(True):
 			curr_reward = 0
 			curr_state = self.env.reset()
 			curr_state = curr_state.reshape([1,self.feature_size])
 			curr_action = self.epsilon_greedy_policy(self.net.model.predict(curr_state))
 
-			# while(iters<self.train_iters): 																#uncomment for cartpole
-			while(True): 																					#uncomment for mountaincar
+			while(True):
+			# while(iters<self.train_iters):
 				# print(len(self.replay_mem.experience))
 				self.env.render()
 				nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
@@ -184,14 +164,11 @@ class DQN_Agent():
 						truth[i] = self.prediction_net.model.predict(state_t)
 						truth[i][action_t] = reward_t
 					else:
-						q_target = reward_t + self.discount_factor*np.amax(self.prediction_net.model.predict(nextstate_t))
+						q_target = reward_ft + self.discount_factor*np.amax(self.prediction_net.model.predict(nextstate_t))
 						truth[i] = self.prediction_net.model.predict(state_t)
 						truth[i][action_t] = q_target
 
-				if(iters%self.print_loss_iters==0):
-					self.net.model.fit(input_state,truth,epochs=1,verbose=1,batch_size = len(self.replay_mem.batch))
-				else:
-					self.net.model.fit(input_state,truth,epochs=1,verbose=0,batch_size = len(self.replay_mem.batch))
+				self.net.model.fit(input_state,truth,epochs=1,verbose=0,batch_size = len(self.replay_mem.batch))
 
 				nextstate = nextstate.reshape([1,self.feature_size])
 				q_nextstate = self.net.model.predict(nextstate)
@@ -204,17 +181,11 @@ class DQN_Agent():
 				# if(iters%self.save_weights_iters==0):
 				# 	self.net.save_model_weights(backup)
 				if(iters%self.save_model_iters==0):
-					if(self.env == "CartPole-v0"):
-						self.net.model.save('cp_BN_deep_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-					elif(self.env == "MountainCar-v0"):
-						self.net.model.save('mc_BN_deep_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+					self.net.model.save('mountaincar_3x32_drop1_model_backup_deep_replay.h5')
 
+				# print(self.epsilon, iters, curr_episode, curr_reward)
 				self.epsilon -= self.epsilon_decay
 				self.epsilon = max(self.epsilon, 0.05)
-
-				# if(iters%self.update_prediction_net_iters==0):
-				# 	self.prediction_net.load_model_weights(self.net.model.get_weights())
-					# self.net.visualise_weights()
 			###end of episode##
 
 			self.prediction_net.load_model_weights(self.net.model.get_weights())
@@ -242,15 +213,10 @@ class DQN_Agent():
 		while(curr_mem_size<self.replay_mem.burn_in):
 			state = self.env.reset()
 			action = np.random.randint(self.action_size)
-			while(curr_mem_size<self.replay_mem.burn_in):
-				nextstate, reward, is_terminal, _ = self.env.step(action)
-				if(is_terminal == True):
-					break
+			nextstate, reward, is_terminal, _ = self.env.step(action)
+			if(is_terminal==False):
 				self.replay_mem.append([state,action,reward,nextstate,is_terminal])
 				curr_mem_size += 1
-
-				action = np.random.randint(self.action_size)
-				state = nextstate
 
 
 def parse_arguments():

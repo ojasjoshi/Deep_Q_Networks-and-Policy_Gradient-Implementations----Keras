@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 import keras, tensorflow as tf, numpy as np, gym, sys, copy, argparse
-from keras.models import Sequential
-from keras.layers import Dense, Activation, Dropout
+from keras.models import Model
+from keras.layers import Dense, Input, Lambda
 from keras.optimizers import Adam
+from keras import backend as K
 import collections
 import time
 from keras.utils import plot_model
@@ -17,26 +18,35 @@ class QNetwork():
 	def __init__(self, env):
 		# Define your network architecture here. It is also a good idea to define any training operations
 		# and optimizers here, initialize your variables, or alternately compile your model here.
-		self.learning_rate = 0.0001
+		self.learning_rate = 0.0001           																			#HYPERPARAMETER1
+		print("Setting up network....")
 
-		self.model = Sequential()
-		self.model.add(Dense(32, input_dim = env.observation_space.shape[0], kernel_initializer='he_uniform'))
-		self.model.add(Activation('relu'))
-		self.model.add(BatchNormalization())
-		# self.model.add(Dropout(0.5))
-		self.model.add(Dense(32, input_dim = 32, kernel_initializer='he_uniform'))
-		self.model.add(Activation('relu'))
-		self.model.add(BatchNormalization())
-		# self.model.add(Dropout(0.5))
-		self.model.add(Dense(32, input_dim = 32, kernel_initializer='he_uniform'))
-		self.model.add(Activation('relu'))
-		self.model.add(BatchNormalization())
-		# self.model.add(Dropout(0.5))
-		self.model.add(Dense(env.action_space.n, input_dim = 32, kernel_initializer='he_uniform'))
-		self.model.add(Activation('linear'))
+		inp = Input(shape=(env.observation_space.shape[0],))
+		layer_shared1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(inp)
+		layer_shared1 = BatchNormalization()(layer_shared1)
+		layer_shared2 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared1)
+		layer_shared2 = BatchNormalization()(layer_shared2)
+		# layers_shared = layer_shared2(layer_shared1(inp))
+		print("Shared layers initialized....")
 
+		layer_v1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared2)
+		layer_v1 = BatchNormalization()(layer_v1)
+		layer_a1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared2)
+		layer_a1 = BatchNormalization()(layer_a1)
+		layer_v2 = Dense(1,activation='linear',kernel_initializer='he_uniform')(layer_v1)
+		layer_a2 = Dense(env.action_space.n,activation='linear',kernel_initializer='he_uniform')(layer_a1)
+		# layer_v = layer_v2(layer_v1(layers_shared))
+		# layer_a = layer_a2(layer_a1(layers_shared))
+		print("Value and Advantage Layers initialised....")
+
+		# layer_q = Lambda(lambda x: x[0][:] + x[1][:] - K.mean(x[1][:]), output_shape=(env.action_space.n,))([layer_v, layer_a])
+		layer_q = Lambda(lambda x: x[0][:] + x[1][:] - K.mean(x[1][:]), output_shape=(env.action_space.n,))([layer_v2, layer_a2])
+
+		print("Q-function layer initialized.... :)\n")
+
+		self.model = Model(inp, layer_q)
 		self.model.compile(optimizer = Adam(lr=self.learning_rate), loss='mse')
-		plot_model(self.model, to_file='DDQN.png', show_shapes = True)
+		plot_model(self.model, to_file='Dueling Double DQN.png', show_shapes = True)
 
 	def save_model_weights(self, suffix):
 		# Helper function to save your model / weights.
@@ -55,7 +65,12 @@ class QNetwork():
 		print("Current Weights\n")
 		for layer in self.model.layers:
 			temp = layer.get_weights()
-			print(temp)
+			if(len(temp)==0):
+				print(len(temp))
+			else:
+				print(len(temp),temp[0].shape)
+
+		print("\n")
 
 
 class Replay_Memory():
@@ -161,7 +176,7 @@ class DQN_Agent():
 
 			# while(iters<self.train_iters): 																#uncomment for cartpole
 			while(True): 																					#uncomment for mountaincar
-				# print(len(self.replay_mem.experience))
+				# print(len(self.replay_mem.experience))	
 				self.env.render()
 				nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
 				self.replay_mem.append([curr_state,curr_action,reward,nextstate,is_terminal])
@@ -203,18 +218,20 @@ class DQN_Agent():
 
 				# if(iters%self.save_weights_iters==0):
 				# 	self.net.save_model_weights(backup)
+
 				if(iters%self.save_model_iters==0):
-					if(self.env == "CartPole-v0"):
-						self.net.model.save('cp_BN_deep_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-					elif(self.env == "MountainCar-v0"):
-						self.net.model.save('mc_BN_deep_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+					if(env == "CartPole-v0"):
+						self.net.model.save('cp_BN_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+					elif(env == "MountainCar-v0"):
+						self.net.model.save('mc_BN_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+					
 
 				self.epsilon -= self.epsilon_decay
 				self.epsilon = max(self.epsilon, 0.05)
 
 				# if(iters%self.update_prediction_net_iters==0):
 				# 	self.prediction_net.load_model_weights(self.net.model.get_weights())
-					# self.net.visualise_weights()
+					# 	self.net.visualise_weights()
 			###end of episode##
 
 			self.prediction_net.load_model_weights(self.net.model.get_weights())
@@ -242,15 +259,10 @@ class DQN_Agent():
 		while(curr_mem_size<self.replay_mem.burn_in):
 			state = self.env.reset()
 			action = np.random.randint(self.action_size)
-			while(curr_mem_size<self.replay_mem.burn_in):
-				nextstate, reward, is_terminal, _ = self.env.step(action)
-				if(is_terminal == True):
-					break
+			nextstate, reward, is_terminal, _ = self.env.step(action)
+			if(is_terminal==False):
 				self.replay_mem.append([state,action,reward,nextstate,is_terminal])
 				curr_mem_size += 1
-
-				action = np.random.randint(self.action_size)
-				state = nextstate
 
 
 def parse_arguments():

@@ -204,9 +204,9 @@ class DQN_Agent():
 				# if(iters%self.save_weights_iters==0):
 				# 	self.net.save_model_weights(backup)
 				if(iters%self.save_model_iters==0):
-					if(self.env == "CartPole-v0"):
+					if(env == "CartPole-v0"):
 						self.net.model.save('cp_BN_deep_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-					elif(self.env == "MountainCar-v0"):
+					elif(env == "MountainCar-v0"):
 						self.net.model.save('mc_BN_deep_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
 
 				self.epsilon -= self.epsilon_decay
@@ -242,15 +242,10 @@ class DQN_Agent():
 		while(curr_mem_size<self.replay_mem.burn_in):
 			state = self.env.reset()
 			action = np.random.randint(self.action_size)
-			while(curr_mem_size<self.replay_mem.burn_in):
-				nextstate, reward, is_terminal, _ = self.env.step(action)
-				if(is_terminal == True):
-					break
+			nextstate, reward, is_terminal, _ = self.env.step(action)
+			if(is_terminal==False):
 				self.replay_mem.append([state,action,reward,nextstate,is_terminal])
 				curr_mem_size += 1
-
-				action = np.random.randint(self.action_size)
-				state = nextstate
 
 
 def parse_arguments():
