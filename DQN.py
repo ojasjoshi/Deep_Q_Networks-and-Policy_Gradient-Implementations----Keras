@@ -6,6 +6,7 @@ from keras.layers.normalization import BatchNormalization
 from keras import backend as K
 from keras.optimizers import Adam
 from keras.utils import plot_model
+# from gym.wrapper import Monitor
 import collections
 import time
 
@@ -24,7 +25,7 @@ class QNetwork():
 		if(deep==False and duel==False): 
 			print("Setting up linear network....")
 			self.model = Sequential()
-			self.model.add(Dense(env.action_space.n, input_dim = env.observation_space.shape[0], kernel_initializer='he_uniform'))
+			self.model.add(Dense(env.action_space.n, input_dim = env.observation_space.shape[0], kernel_initializer='he_uniform', use_bias = True))
 			self.model.add(Activation('linear'))
 			self.model.compile(optimizer = Adam(lr=self.learning_rate), loss='mse')
 			plot_model(self.model, to_file='Linear.png', show_shapes = True)
@@ -32,19 +33,19 @@ class QNetwork():
 		elif(deep==True):	
 			print("Setting up DDQN network....")
 			self.model = Sequential()
-			self.model.add(Dense(32, input_dim = env.observation_space.shape[0], kernel_initializer='he_uniform'))
+			self.model.add(Dense(32, input_dim = env.observation_space.shape[0], kernel_initializer='he_uniform',use_bias = True))
 			self.model.add(Activation('relu'))
 			# self.model.add(BatchNormalization())
 			# self.model.add(Dropout(0.5))
-			self.model.add(Dense(32, input_dim = 32, kernel_initializer='he_uniform'))
+			self.model.add(Dense(32, input_dim = 32, kernel_initializer='he_uniform',use_bias = True))
 			self.model.add(Activation('relu'))
 			# self.model.add(BatchNormalization())
 			# self.model.add(Dropout(0.5))
-			self.model.add(Dense(32, input_dim = 32, kernel_initializer='he_uniform'))
+			self.model.add(Dense(32, input_dim = 32, kernel_initializer='he_uniform',use_bias = True))
 			self.model.add(Activation('relu'))
 			# self.model.add(BatchNormalization())
 			# self.model.add(Dropout(0.5))
-			self.model.add(Dense(env.action_space.n, input_dim = 32, kernel_initializer='he_uniform'))
+			self.model.add(Dense(env.action_space.n, input_dim = 32, kernel_initializer='he_uniform'),use_bias = True)
 			self.model.add(Activation('linear'))
 			print("Q-Network initialized.... :)\n")
 
@@ -54,25 +55,30 @@ class QNetwork():
 		elif(duel==True):			
 			print("Setting up Dueling DDQN network....")
 			inp = Input(shape=(env.observation_space.shape[0],))
-			layer_shared1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(inp)
+			layer_shared1 = Dense(32,activation='relu',kernel_initializer='he_uniform',use_bias = True)(inp)
 			# layer_shared1 = BatchNormalization()(layer_shared1)
-			layer_shared2 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared1)
+			layer_shared2 = Dense(32,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_shared1)
 			# layer_shared2 = BatchNormalization()(layer_shared2)
 			# layers_shared = layer_shared2(layer_shared1(inp))
 			print("Shared layers initialized....")
 
-			layer_v1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared2)
+			layer_v1 = Dense(32,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_shared2)
 			# layer_v1 = BatchNormalization()(layer_v1)
-			layer_a1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared2)
+			layer_a1 = Dense(32,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_shared2)
 			# layer_a1 = BatchNormalization()(layer_a1)
-			layer_v2 = Dense(1,activation='linear',kernel_initializer='he_uniform')(layer_v1)
-			layer_a2 = Dense(env.action_space.n,activation='linear',kernel_initializer='he_uniform')(layer_a1)
+			layer_v2 = Dense(1,activation='linear',kernel_initializer='he_uniform',use_bias = True)(layer_v1)
+			layer_a2 = Dense(env.action_space.n,activation='linear',kernel_initializer='he_uniform',use_bias = True)(layer_a1)
 			# layer_v = layer_v2(layer_v1(layers_shared))
 			# layer_a = layer_a2(layer_a1(layers_shared))
 			print("Value and Advantage Layers initialised....")
 
+			# temp = layer_v2
+			# for i in range(env.action_space.n-1):
+			# 	layer_v2 = keras.layers.concatenate([layer_v2,temp],axis=-1)
+			
+
 			# layer_q = Lambda(lambda x: x[0][:] + x[1][:] - K.mean(x[1][:]), output_shape=(env.action_space.n,))([layer_v, layer_a])
-			layer_q = Lambda(lambda x: x[0][:] + x[1][:] - K.mean(x[1][:]), output_shape=(env.action_space.n,))([layer_v2, layer_a2])
+			layer_q = Lambda(lambda x: x[0][:]  + x[1][:] - K.mean(x[1][:],keepdims=True), output_shape=(env.action_space.n,))([layer_v2, layer_a2])
 
 			print("Q-function layer initialized.... :)\n")
 
@@ -152,7 +158,7 @@ class DQN_Agent():
 		self.duel = duel
 		self.env = env
 		self.env_name = env_name
-		self.replay_mem = Replay_Memory(20000,5000)																#HYPERPARAMETER2
+		self.replay_mem = Replay_Memory()																	   #HYPERPARAMETER2
 		self.render = render
 		self.feature_size = env.observation_space.shape[0]
 		self.action_size = env.action_space.n
@@ -164,16 +170,17 @@ class DQN_Agent():
 			self.discount_factor = 1
 
 		self.train_iters = 1000000
-		self.epsilon = 0.5 																						#HYPERPARAMETER3
+		self.epsilon = 0.5 																					#HYPERPARAMETER3
 		self.epsilon_min = 0.05																					#HYPERPARAMETER4
 		self.num_episodes = 4000
-		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/150000)										#HYPERPARAMETER5
+		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/100000)										#HYPERPARAMETER5
 		self.update_prediction_net_iters =500 																	#HYPERPARAMETER6
 		self.avg_rew_buf_size_epi = 10 
 		self.save_weights_iters = 5000 
 		self.save_model_iters = 2000 															
 		self.print_epi = 1 
 		self.print_loss_epi = 50 
+		self.save_vid = int(self.num_episodes/4)
 
 		self.evaluate = 0.0
 
@@ -213,7 +220,7 @@ class DQN_Agent():
 
 				if(self.replay==False and self.deep==False and self.duel==False):
 
-					nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
+					nextstate, reward, is_terminal, _ = self.env.step(curr_action)
 					curr_reward += reward
 					# truth = np.zeros(shape=[1,self.action_size])
 
@@ -225,9 +232,11 @@ class DQN_Agent():
 						break
 
 					nextstate = nextstate.reshape([1,self.feature_size])
-					q_nextstate = self.net.model.predict(nextstate)
 					nextaction = self.epsilon_greedy_policy(q_nextstate)
+
+					q_nextstate = self.net.model.predict(nextstate)
 					q_target = reward + self.discount_factor*np.amax(q_nextstate)
+
 
 					truth = self.net.model.predict(curr_state)
 					truth[0][curr_action] = q_target
@@ -253,7 +262,7 @@ class DQN_Agent():
 
 
 				else:
-					nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
+					nextstate, reward, is_terminal, _ = self.env.step(curr_action)
 					self.replay_mem.append([curr_state,curr_action,reward,nextstate,is_terminal])
 
 					curr_reward += reward
@@ -264,6 +273,7 @@ class DQN_Agent():
 					self.replay_mem.sample_batch()
 					input_state = np.zeros(shape=[len(self.replay_mem.batch),self.feature_size])
 					truth = np.zeros(shape=[len(self.replay_mem.batch),self.action_size])
+
 					for i in range(len(self.replay_mem.batch)):
 						state_t,action_t,reward_t,nextstate_t,_ = self.replay_mem.batch[i]
 
@@ -272,13 +282,13 @@ class DQN_Agent():
 
 						input_state[i] = state_t
 						if(self.replay_mem.batch[i][4]==True):
-							truth[i] = self.prediction_net.model.predict(state_t)
+							truth[i] = self.net.model.predict(state_t)
 							truth[i][action_t] = reward_t
 						else:
 							q_target = reward_t + self.discount_factor*np.amax(self.prediction_net.model.predict(nextstate_t))
-							truth[i] = self.prediction_net.model.predict(state_t)
+							truth[i] = self.net.model.predict(state_t)
 							truth[i][action_t] = q_target
-
+					
 					if(curr_episode%self.print_loss_epi==0):
 						self.net.model.fit(input_state,truth,epochs=1,verbose=1,batch_size = len(self.replay_mem.batch))
 					else:
@@ -332,7 +342,7 @@ class DQN_Agent():
 			avg_reward = sum(reward_buf)/len(reward_buf)
 
 			if(curr_episode%self.print_epi==0):
-				print(curr_episode, iters, self.epsilon ,avg_reward)
+				print(curr_episode, iters, self.epsilon ,avg_reward, curr_reward)
 			curr_episode += 1
 
 	def test(self, model_file=None):
@@ -348,7 +358,7 @@ class DQN_Agent():
 				break
 			nextstate = nextstate.reshape([1,self.feature_size])
 			q_nextstate = self.net.model.predict(nextstate)
-			nextaction = self.epsilon_greedy_policy(q_nextstate)
+			nextaction = self.greedy_policy(q_nextstate)
 			
 			curr_state = nextstate
 			curr_action = nextaction
@@ -361,18 +371,18 @@ class DQN_Agent():
 		# Initialize your replay memory with a burn_in number of episodes / transitions.
 		# Burn-in with random state and action transitions
 		curr_mem_size = 0
-		while(curr_mem_size<self.replay_mem.burn_in):
-			state = self.env.reset()
-			action = np.random.randint(self.action_size)
-			while(curr_mem_size<self.replay_mem.burn_in):
-				nextstate, reward, is_terminal, _ = self.env.step(action)
-				if(is_terminal == True):
-					break
-				self.replay_mem.append([state,action,reward,nextstate,is_terminal])
-				curr_mem_size += 1
 
-				action = np.random.randint(self.action_size)
+		state = self.env.reset()
+		action = np.random.randint(self.action_size)
+		while(curr_mem_size<self.replay_mem.burn_in):
+			nextstate, reward, is_terminal, _ = self.env.step(action)
+			self.replay_mem.append([state,action,reward,nextstate,is_terminal])
+			curr_mem_size += 1
+			if(is_terminal == True):
+				state = self.env.reset()
+			else:
 				state = nextstate
+			action = np.random.randint(self.action_size)
 
 
 def parse_arguments():
@@ -394,6 +404,8 @@ def main(args):
 	environment_name = args.env
 	env = gym.make(environment_name)
 
+	# save_episodes=np.round(np.linspace(0,4000,num=100))
+	# env = gym.wrappers.Monitor(env,'./Videos/temp/',video_callable=lambda episode_id:episode_id in save_episodes, force=True)
 	# Setting the session to allow growth, so it doesn't allocate all GPU memory.
 	gpu_ops = tf.GPUOptions(allow_growth=True)
 	config = tf.ConfigProto(gpu_options=gpu_ops)

@@ -220,9 +220,9 @@ class DQN_Agent():
 				# 	self.net.save_model_weights(backup)
 
 				if(iters%self.save_model_iters==0):
-					if(env == "CartPole-v0"):
+					if(self.env == "CartPole-v0"):
 						self.net.model.save('cp_BN_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-					elif(env == "MountainCar-v0"):
+					elif(self.env == "MountainCar-v0"):
 						self.net.model.save('mc_BN_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
 					
 
@@ -259,10 +259,15 @@ class DQN_Agent():
 		while(curr_mem_size<self.replay_mem.burn_in):
 			state = self.env.reset()
 			action = np.random.randint(self.action_size)
-			nextstate, reward, is_terminal, _ = self.env.step(action)
-			if(is_terminal==False):
+			while(curr_mem_size<self.replay_mem.burn_in):
+				nextstate, reward, is_terminal, _ = self.env.step(action)
+				if(is_terminal == True):
+					break
 				self.replay_mem.append([state,action,reward,nextstate,is_terminal])
 				curr_mem_size += 1
+
+				action = np.random.randint(self.action_size)
+				state = nextstate
 
 
 def parse_arguments():
