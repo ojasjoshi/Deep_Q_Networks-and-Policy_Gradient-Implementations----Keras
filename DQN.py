@@ -172,7 +172,7 @@ class DQN_Agent():
 		self.save_weights_iters = 5000 
 		self.save_model_iters = 2000 															
 		self.print_epi = 1 
-		self.print_loss_iters = 2000 
+		self.print_loss_epi = 50 
 
 		self.evaluate = 0.0
 
@@ -231,7 +231,7 @@ class DQN_Agent():
 					truth = self.net.model.predict(curr_state)
 					truth[0][curr_action] = q_target
 
-					if(iters%self.print_loss_iters==0):
+					if(curr_episode%self.print_loss_epi==0):
 						self.net.model.fit(curr_state,truth,epochs=1,verbose=1)
 					else:
 						self.net.model.fit(curr_state,truth,epochs=1,verbose=0)
@@ -278,7 +278,7 @@ class DQN_Agent():
 							truth[i] = self.prediction_net.model.predict(state_t)
 							truth[i][action_t] = q_target
 
-					if(iters%self.print_loss_iters==0):
+					if(curr_episode%self.print_loss_epi==0):
 						self.net.model.fit(input_state,truth,epochs=1,verbose=1,batch_size = len(self.replay_mem.batch))
 					else:
 						self.net.model.fit(input_state,truth,epochs=1,verbose=0,batch_size = len(self.replay_mem.batch))
