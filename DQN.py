@@ -20,7 +20,7 @@ class QNetwork():
 	def __init__(self, env, replay, deep, duel):
 		# Define your network architecture here. It is also a good idea to define any training operations
 		# and optimizers here, initialize your variables, or alternately compile your model here.
-		self.learning_rate = 0.0001																							#HYPERPARAMETER1
+		self.learning_rate = 0.001																							#HYPERPARAMETER1
 
 		if(deep==False and duel==False): 
 			print("Setting up linear network....")
@@ -45,7 +45,7 @@ class QNetwork():
 			self.model.add(Activation('relu'))
 			# self.model.add(BatchNormalization())
 			# self.model.add(Dropout(0.5))
-			self.model.add(Dense(env.action_space.n, input_dim = 32, kernel_initializer='he_uniform'),use_bias = True)
+			self.model.add(Dense(env.action_space.n, input_dim = 32, kernel_initializer='he_uniform',use_bias = True))
 			self.model.add(Activation('linear'))
 			print("Q-Network initialized.... :)\n")
 
