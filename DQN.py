@@ -2,12 +2,13 @@
 import keras, tensorflow as tf, numpy as np, gym, sys, copy, argparse
 from keras.models import Sequential, Model
 from keras.layers import Dense, Activation, Dropout, Input, Lambda
+from keras.layers.normalization import BatchNormalization
 from keras import backend as K
 from keras.optimizers import Adam
+from keras.utils import plot_model
 import collections
 import time
-from keras.utils import plot_model
-from keras.layers.normalization import BatchNormalization
+
 
 class QNetwork():
 
@@ -18,7 +19,7 @@ class QNetwork():
 	def __init__(self, env, replay, deep, duel):
 		# Define your network architecture here. It is also a good idea to define any training operations
 		# and optimizers here, initialize your variables, or alternately compile your model here.
-		self.learning_rate = 0.0001																								#HYPERPARAMETER1
+		self.learning_rate = 0.001																								#HYPERPARAMETER1
 
 		if(deep==False and duel==False): 
 			print("Setting up linear network....")
@@ -61,9 +62,9 @@ class QNetwork():
 			print("Shared layers initialized....")
 
 			layer_v1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared2)
-			layer_v1 = BatchNormalization()(layer_v1)
+			# layer_v1 = BatchNormalization()(layer_v1)
 			layer_a1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared2)
-			layer_a1 = BatchNormalization()(layer_a1)
+			# layer_a1 = BatchNormalization()(layer_a1)
 			layer_v2 = Dense(1,activation='linear',kernel_initializer='he_uniform')(layer_v1)
 			layer_a2 = Dense(env.action_space.n,activation='linear',kernel_initializer='he_uniform')(layer_a1)
 			# layer_v = layer_v2(layer_v1(layers_shared))
@@ -150,7 +151,7 @@ class DQN_Agent():
 		self.deep = deep
 		self.duel = duel
 		self.env = env
-		self.replay_mem = Replay_Memory()																	#HYPERPARAMETER2
+		self.replay_mem = Replay_Memory(10000,500)																#HYPERPARAMETER2
 		self.render = render
 		self.feature_size = env.observation_space.shape[0]
 		self.action_size = env.action_space.n
@@ -162,11 +163,11 @@ class DQN_Agent():
 			self.discount_factor = 1
 
 		self.train_iters = 1000000
-		self.epsilon = 0.5 																					#HYPERPARAMETER3
-		self.epsilon_min = 0.05																				#HYPERPARAMETER4
+		self.epsilon = 0.5 																						#HYPERPARAMETER3
+		self.epsilon_min = 0.05																					#HYPERPARAMETER4
 		self.num_episodes = 4000
-		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/100000)									#HYPERPARAMETER5
-		self.update_prediction_net_iters =500 																#HYPERPARAMETER6
+		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/150000)										#HYPERPARAMETER5
+		self.update_prediction_net_iters =500 																	#HYPERPARAMETER6
 		self.avg_rew_buf_size_epi = 10 
 		self.save_weights_iters = 5000 
 		self.save_model_iters = 2000 															
