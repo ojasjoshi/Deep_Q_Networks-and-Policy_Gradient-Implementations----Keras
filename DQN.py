@@ -19,7 +19,7 @@ class QNetwork():
 	def __init__(self, env, replay, deep, duel):
 		# Define your network architecture here. It is also a good idea to define any training operations
 		# and optimizers here, initialize your variables, or alternately compile your model here.
-		self.learning_rate = 0.001																								#HYPERPARAMETER1
+		self.learning_rate = 0.0001																							#HYPERPARAMETER1
 
 		if(deep==False and duel==False): 
 			print("Setting up linear network....")
@@ -34,15 +34,15 @@ class QNetwork():
 			self.model = Sequential()
 			self.model.add(Dense(32, input_dim = env.observation_space.shape[0], kernel_initializer='he_uniform'))
 			self.model.add(Activation('relu'))
-			self.model.add(BatchNormalization())
+			# self.model.add(BatchNormalization())
 			# self.model.add(Dropout(0.5))
 			self.model.add(Dense(32, input_dim = 32, kernel_initializer='he_uniform'))
 			self.model.add(Activation('relu'))
-			self.model.add(BatchNormalization())
+			# self.model.add(BatchNormalization())
 			# self.model.add(Dropout(0.5))
 			self.model.add(Dense(32, input_dim = 32, kernel_initializer='he_uniform'))
 			self.model.add(Activation('relu'))
-			self.model.add(BatchNormalization())
+			# self.model.add(BatchNormalization())
 			# self.model.add(Dropout(0.5))
 			self.model.add(Dense(env.action_space.n, input_dim = 32, kernel_initializer='he_uniform'))
 			self.model.add(Activation('linear'))
@@ -55,9 +55,9 @@ class QNetwork():
 			print("Setting up Dueling DDQN network....")
 			inp = Input(shape=(env.observation_space.shape[0],))
 			layer_shared1 = Dense(32,activation='relu',kernel_initializer='he_uniform')(inp)
-			layer_shared1 = BatchNormalization()(layer_shared1)
+			# layer_shared1 = BatchNormalization()(layer_shared1)
 			layer_shared2 = Dense(32,activation='relu',kernel_initializer='he_uniform')(layer_shared1)
-			layer_shared2 = BatchNormalization()(layer_shared2)
+			# layer_shared2 = BatchNormalization()(layer_shared2)
 			# layers_shared = layer_shared2(layer_shared1(inp))
 			print("Shared layers initialized....")
 
@@ -140,7 +140,7 @@ class DQN_Agent():
 	# (4) Create a function to test the Q Network's performance on the environment.
 	# (5) Create a function for Experience Replay.
 
-	def __init__(self, env, replay, deep, duel, render):
+	def __init__(self, env, replay, deep, duel, render, env_name):
 
 		# Create an instance of the network itself, as well as the memory.
 		# Here is also a good place to set environmental parameters,
@@ -151,15 +151,16 @@ class DQN_Agent():
 		self.deep = deep
 		self.duel = duel
 		self.env = env
-		self.replay_mem = Replay_Memory(10000,500)																#HYPERPARAMETER2
+		self.env_name = env_name
+		self.replay_mem = Replay_Memory(20000,5000)																#HYPERPARAMETER2
 		self.render = render
 		self.feature_size = env.observation_space.shape[0]
 		self.action_size = env.action_space.n
 		self.discount_factor = 1 	
 
-		if(env == "CartPole-v0"):
+		if(env_name == "CartPole-v0"):
 			self.discount_factor = 0.99
-		elif(env == "MountainCar-v0"):
+		elif(env_name == "MountainCar-v0"):
 			self.discount_factor = 1
 
 		self.train_iters = 1000000
@@ -244,9 +245,9 @@ class DQN_Agent():
 					# if(iters%self.save_weights_iters==0):
 					# 	self.net.save_model_weights(backup)
 					if(iters%self.save_model_iters==0):
-						if(self.env == "CartPole-v0"):
+						if(self.env_name == "CartPole-v0"):
 							self.net.model.save('cp_BN_linear_nrp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-						elif(self.env == "MountainCar-v0"):
+						elif(self.env_name == "MountainCar-v0"):
 							self.net.model.save('mc_BN_linear_nrp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
 				
 
@@ -296,22 +297,22 @@ class DQN_Agent():
 
 					if(iters%self.save_model_iters==0):
 						if(self.replay==True):
-							if(self.env == "CartPole-v0"):
-								self.net.model.save('cp_BN_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-							elif(self.env == "MountainCar-v0"):
-								self.net.model.save('mc_BN_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+							if(self.env_name == "CartPole-v0"):
+								self.net.model.save('cp_NBN_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+							elif(self.env_name == "MountainCar-v0"):
+								self.net.model.save('mc_NBN_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
 
 						elif(self.deep==True):
-							if(self.env == "CartPole-v0"):
-								self.net.model.save('cp_BN_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-							elif(self.env == "MountainCar-v0"):
-								self.net.model.save('mc_BN_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+							if(self.env_name == "CartPole-v0"):
+								self.net.model.save('cp_NBN_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+							elif(self.env_name == "MountainCar-v0"):
+								self.net.model.save('mc_NBN_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
 
 						elif(self.duel==True):			
-							if(self.env == "CartPole-v0"):
-								self.net.model.save('cp_BN_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-							elif(self.env == "MountainCar-v0"):
-								self.net.model.save('mc_BN_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+							if(self.env_name == "CartPole-v0"):
+								self.net.model.save('cp_NBN_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+							elif(self.env_name == "MountainCar-v0"):
+								self.net.model.save('mc_NBN_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
 
 				self.epsilon -= self.epsilon_decay
 				self.epsilon = max(self.epsilon, 0.05)
@@ -402,7 +403,7 @@ def main(args):
 	keras.backend.tensorflow_backend.set_session(sess)
 
 	# You want to create an instance of the DQN_Agent class here, and then train / test it.
-	agent = DQN_Agent(env,args.replay,args.deep,args.duel,args.render)
+	agent = DQN_Agent(env,args.replay,args.deep,args.duel,args.render,args.env)
 	agent.train()
 	agent.test()
 
