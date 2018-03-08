@@ -85,7 +85,7 @@ class DQN_Agent():
 
 		self.env = env
 		self.replay = replay
-		self.replay_mem = Replay_Memory(20000,1000)																	#HYPERPARAMETER2
+		self.replay_mem = Replay_Memory(20000,1000)															#HYPERPARAMETER2
 		self.render = render
 		self.feature_size = env.observation_space.shape[0]
 		self.action_size = env.action_space.n
@@ -97,7 +97,7 @@ class DQN_Agent():
 			self.discount_factor = 1
 
 		self.train_iters = 1000000
-		self.epsilon = 0.75 																					#HYPERPARAMETER3
+		self.epsilon = 0.75 																				#HYPERPARAMETER3
 		self.epsilon_min = 0.05																				#HYPERPARAMETER4
 		self.num_episodes = 4000
 		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/100000)									#HYPERPARAMETER5
