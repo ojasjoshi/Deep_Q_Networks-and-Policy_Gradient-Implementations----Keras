@@ -53,7 +53,8 @@ class QNetwork():
 
 			self.model.compile(optimizer = Adam(lr=self.learning_rate), loss='mse')
 			plot_model(self.model, to_file='graphs/DDQN.png', show_shapes = True)
-		
+			self.model.summary()
+
 		elif(duel==True):			
 			print("Setting up Dueling DDQN network....")
 			inp = Input(shape=(env.observation_space.shape[0],))
@@ -86,7 +87,7 @@ class QNetwork():
 			print("Q-function layer initialized.... :)\n")
 
 			self.model = Model(inp, layer_q)
-			# self.model.summary()
+			self.model.summary()
 			self.model.compile(optimizer = Adam(lr=self.learning_rate), loss='mse')
 			plot_model(self.model, to_file='graphs/Duel_DQN.png', show_shapes = True)
 		# elif(space==True):			
@@ -174,7 +175,7 @@ class DQN_Agent():
 		elif(env_name == "MountainCar-v0"):
 			self.discount_factor = 1
 
-		self.train_iters = 1000
+		self.train_iters = 10000
 		self.epsilon = 0.5 																						#HYPERPARAMETER3
 		self.epsilon_min = 0.05																					#HYPERPARAMETER4
 		self.num_episodes = 4000
@@ -182,7 +183,7 @@ class DQN_Agent():
 		self.update_prediction_net_iters =500 																	#HYPERPARAMETER6
 		self.avg_rew_buf_size_epi = 10 
 		self.save_weights_iters = 100
-		self.save_model_iters = 100 															
+		self.save_model_iters = 100 													
 		self.print_epi = 1 
 		self.print_loss_epi = 50 
 		self.save_vid = int(self.num_episodes/4)
@@ -216,22 +217,37 @@ class DQN_Agent():
 		self.burn_in_memory()
 		print("burnin done")	
 
-		
-		# save_episodes=np.around(np.linspace(0,4000,num=50))
-		# self.env = Monitor(self.env,'Videos/',video_callable= lambda episode_id: episode_id in save_episodes, force=True)
+		save_episode_id=np.zeros(1)
+
+		if(self.env_name=="CartPole-v0"):
+			save_episode_id=np.around(np.linspace(0,40000,num=41))
+		elif(self.env_name=="MountainCar-v0"):
+			save_episode_id=np.around(np.linspace(0,self.num_episodes,num=4))
+
+		if(self.duel):
+			video_file_path = 'videos/'+str(self.env_name)+'/duel/'
+		if(self.deep):
+			video_file_path = 'videos/'+str(self.env_name)+'/deep/'
+		if(self.replay):
+			video_file_path = 'videos/'+str(self.env_name)+'/replay/'
+		else:
+			video_file_path = 'videos/'+str(self.env_name)+'/linear/'
+
+		self.env = Monitor(self.env,video_file_path,video_callable= lambda episode_id: episode_id in save_episode_id, force=True)
+
 		complete = 0
-		while(iters<self.train_iters): 																			#uncomment for cartpole
-		# for e in range(self.num_episodes):																	#uncomment for mountaincar
+		# while(iters<self.train_iters): 																			#uncomment for cartpole
+		for e in range(self.num_episodes):																	#uncomment for mountaincar
 			curr_reward = 0
 			curr_iters = 0
+			# print("Episode resets")
 			curr_state = self.env.reset()
 			curr_state = curr_state.reshape([1,self.feature_size])
 			curr_action = self.epsilon_greedy_policy(self.net.model.predict(curr_state))
-			
-			while(iters<self.train_iters): 																		#uncomment for cartpole
-			# while(True): 																						#uncomment for mountaincar
+			# print("Inside new episode")
+			# while(iters<self.train_iters): 																		#uncomment for cartpole
+			while(True): 																						#uncomment for mountaincar
 				# self.env.render()
-
 				if(self.replay==False and self.deep==False and self.duel==False):
 
 					nextstate, reward, is_terminal, _ = self.env.step(curr_action)
@@ -285,7 +301,6 @@ class DQN_Agent():
 
 
 				else:
-					
 					nextstate, reward, is_terminal, _ = self.env.step(curr_action)
 					self.replay_mem.append([curr_state,curr_action,reward,nextstate,is_terminal])
 
