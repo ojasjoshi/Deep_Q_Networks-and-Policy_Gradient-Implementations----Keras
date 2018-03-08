@@ -175,15 +175,15 @@ class DQN_Agent():
 		elif(env_name == "MountainCar-v0"):
 			self.discount_factor = 1
 
-		self.train_iters = 10000
+		self.train_iters = 100000
 		self.epsilon = 0.5 																						#HYPERPARAMETER3
 		self.epsilon_min = 0.05																					#HYPERPARAMETER4
 		self.num_episodes = 4000
 		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/100000)										#HYPERPARAMETER5
 		self.update_prediction_net_iters =500 																	#HYPERPARAMETER6
 		self.avg_rew_buf_size_epi = 10 
-		self.save_weights_iters = 100
-		self.save_model_iters = 100 													
+		self.save_weights_iters = 10000
+		self.save_model_iters = 10000 													
 		self.print_epi = 1 
 		self.print_loss_epi = 50 
 		self.save_vid = int(self.num_episodes/4)
