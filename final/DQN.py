@@ -14,6 +14,8 @@ import matplotlib
 matplotlib.use('TkAgg')
 from matplotlib import pyplot as plt
 import os
+from os import listdir
+from os.path import isfile, join
 
 class QNetwork():
 
@@ -172,15 +174,15 @@ class DQN_Agent():
 		elif(env_name == "MountainCar-v0"):
 			self.discount_factor = 1
 
-		self.train_iters = 100
+		self.train_iters = 1000
 		self.epsilon = 0.5 																						#HYPERPARAMETER3
 		self.epsilon_min = 0.05																					#HYPERPARAMETER4
 		self.num_episodes = 4000
 		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/100000)										#HYPERPARAMETER5
 		self.update_prediction_net_iters =500 																	#HYPERPARAMETER6
 		self.avg_rew_buf_size_epi = 10 
-		self.save_weights_iters = 10
-		self.save_model_iters = 10 															
+		self.save_weights_iters = 100
+		self.save_model_iters = 100 															
 		self.print_epi = 1 
 		self.print_loss_epi = 50 
 		self.save_vid = int(self.num_episodes/4)
@@ -204,8 +206,8 @@ class DQN_Agent():
 		# If training without experience replay_memory, then you will interact with the environment
 		# in this function, while also updating your network parameters.
 		folder = 'none'
-		train_reward = []
 		test_reward = []
+		train_reward = []
 		curr_episode = 1
 		iters = 1
 		max_reward = 0
@@ -228,7 +230,7 @@ class DQN_Agent():
 			
 			while(iters<self.train_iters): 																		#uncomment for cartpole
 			# while(True): 																						#uncomment for mountaincar
-				self.env.render()
+				# self.env.render()
 
 				if(self.replay==False and self.deep==False and self.duel==False):
 
@@ -376,18 +378,20 @@ class DQN_Agent():
 
 			train_reward.append(curr_reward)
 
-		for filename in os.listdir('plots/'+folder):
-			test_reward.append(self.test(20,filename))
-
+		for filename in os.listdir('models/'+folder):
+			if(filename!='.DS_Store'):
+				test_reward.append(agent.test('models/'+folder+'/'+filename))
+		
 		return train_reward, test_reward
-		# return train_reward
 
-	def test(self, epi=200, model_file=None):
+	def test(self, model_file, epi=200):
 		# Evaluate the performance of your agent over 100 episodes, by calculating cummulative rewards for the 100 episodes.
 		# Here you need to interact with the environment, irrespective of whether you are using a memory.
 		self.net.load_model(model_file)
 		
 		curr_reward = 0
+		curr_state = self.env.reset()
+		curr_action = np.random.randint(self.action_size)
 		for e in range(epi):																
 			nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
 			curr_reward += reward
@@ -477,9 +481,9 @@ def main(args):
 
 	# You want to create an instance of the DQN_Agent class here, and then train / test it.
 	agent = DQN_Agent(env,args.replay,args.deep,args.duel,args.render,args.env)
-	# train_reward,test_reward = agent.train()
-	train_reward = agent.train()
-	print(train_reward)
+	train_reward,test_reward = agent.train()
+
+	print(train_reward,test_reward)
 
 	if(args.deep==True):
 		plot_graph(args.env,train_reward,'train','deep')
@@ -493,8 +497,6 @@ def main(args):
 	else:
 		plot_temp1(args.env,train_reward,'train','linear')
 		plot(args.env,test_reward,'test','linear')
-
-	# print(agent.evaluate)
 
 
 if __name__ == '__main__':
