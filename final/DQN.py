@@ -378,34 +378,44 @@ class DQN_Agent():
 
 			train_reward.append(curr_reward)
 
+		final_weight_file = 'temp'
 		for filename in os.listdir('models/'+folder):
-			if(filename!='.DS_Store'):
-				test_reward.append(agent.test('models/'+folder+'/'+filename))
+			if(filename!='.DS_Store' and isfile('models/'+join(folder,filename))):
+				r,_ = self.test('models/'+join(folder,filename),20)
+				test_reward.append(r)
+				final_weight_file = 'models/'+join(folder,filename)
 		
-		return train_reward, test_reward
+		return train_reward, test_reward, final_weight_file
 
-	def test(self, model_file, epi=200):
+	def test(self, model_file, epi=100):
 		# Evaluate the performance of your agent over 100 episodes, by calculating cummulative rewards for the 100 episodes.
 		# Here you need to interact with the environment, irrespective of whether you are using a memory.
 		self.net.load_model(model_file)
-		
-		curr_reward = 0
-		curr_state = self.env.reset()
-		curr_action = np.random.randint(self.action_size)
-		for e in range(epi):																
-			nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
-			curr_reward += reward
-			if(is_terminal):
-				break
-			nextstate = nextstate.reshape([1,self.feature_size])
-			q_nextstate = self.net.model.predict(nextstate)
-			nextaction = self.greedy_policy(q_nextstate)
-			
-			curr_state = nextstate
-			curr_action = nextaction
+		reward_array = np.zeros(epi)
 
-		self.evaluate = float(curr_reward/epi)
-		return float(curr_reward/epi)
+		tot_reward = 0
+		for e in range(epi):	
+			curr_reward = 0															
+			curr_state = self.env.reset()
+			curr_action = np.random.randint(self.action_size)
+			while(True):
+				nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
+				curr_reward += reward
+				if(is_terminal):
+					break
+				nextstate = nextstate.reshape([1,self.feature_size])
+				q_nextstate = self.net.model.predict(nextstate)
+				nextaction = self.greedy_policy(q_nextstate)
+				
+				curr_state = nextstate
+				curr_action = nextaction
+
+			tot_reward += curr_reward
+			reward_array[e] = curr_reward
+
+		self.evaluate = float(tot_reward/epi)
+
+		return float(tot_reward/epi), reward_array
 
 	def burn_in_memory(self):
 		# Initialize your replay memory with a burn_in number of episodes / transitions.
@@ -436,9 +446,10 @@ def parse_arguments():
 	parser.add_argument('--replay',dest='replay',type=bool,default=False)
 	return parser.parse_args()
 
-def plot_temp1(env_name, rewards, type_plot, algo):
-	plt.plot(range(0,len([3,4])),[3,4])
-	plt.show()
+def plot_graph(env_name, rewards, type_plot, algo):
+	# plt.plot(range(0,len([3,4])),[3,4])
+	# plt.show()
+	plt.cla()
 	plt.plot(range(0,len(rewards)),rewards)
 	imgname = 'temp.png'
 	if(type_plot == 'train'):
@@ -481,22 +492,56 @@ def main(args):
 
 	# You want to create an instance of the DQN_Agent class here, and then train / test it.
 	agent = DQN_Agent(env,args.replay,args.deep,args.duel,args.render,args.env)
-	train_reward,test_reward = agent.train()
+	train_reward,test_reward,final_weight_file = agent.train()
 
-	print(train_reward,test_reward)
+	# print(train_reward,test_reward)
 
+	#plot discounted training and undiscounted testing rewards at intervals
 	if(args.deep==True):
 		plot_graph(args.env,train_reward,'train','deep')
-		plot(args.env,test_reward,'test','deep')
+		plot_graph(args.env,test_reward,'test','deep')
 	if(args.duel==True):
 		plot_graph(args.env,train_reward,'train','duel')
-		plot(args.env,test_reward,'test','duel')
+		plot_graph(args.env,test_reward,'test','duel')
 	if(args.replay==True):
 		plot_graph(args.env,train_reward,'train','replay')
-		plot(args.env,test_reward,'test','replay')
+		plot_graph(args.env,test_reward,'test','replay')
 	else:
-		plot_temp1(args.env,train_reward,'train','linear')
-		plot(args.env,test_reward,'test','linear')
+		plot_graph(args.env,train_reward,'train','linear')
+		plot_graph(args.env,test_reward,'test','linear')
+
+	#final test reward gets saves in .txt
+	_, t = agent.test(final_weight_file)
+	file_test = open('final_test.txt', 'w')
+
+	if(args.deep==True):
+		if(args.env=="MountainCar-v0"):
+			file_test.write("mountaincar-deep-std\t"+str(np.std(t))+"\n")
+			file_test.write("mountaincar-deep-mean\t"+str(np.mean(t))+"\n")
+		if(args.env=="CartPole-v0"):	
+			file_test.write("cartpole-deep-std\t"+str(np.std(t))+"\n")
+			file_test.write("cartpole-deep-mean\t"+str(np.mean(t))+"\n")
+	if(args.duel==True):
+		if(args.env=="MountainCar-v0"):
+			file_test.write("mountaincar-duel-std\t"+str(np.std(t))+"\n")
+			file_test.write("mountaincar-duel-mean\t"+str(np.mean(t))+"\n")
+		if(args.env=="CartPole-v0"):	
+			file_test.write("cartpole-duel-std\t"+str(np.std(t))+"\n")
+			file_test.write("cartpole-duel-mean\t"+str(np.mean(t))+"\n")
+	if(args.replay==True):
+		if(args.env=="MountainCar-v0"):
+			file_test.write("mountaincar-replay-std\t"+str(np.std(t))+"\n")
+			file_test.write("mountaincar-replay-mean\t"+str(np.mean(t))+"\n")
+		if(args.env=="CartPole-v0"):	
+			file_test.write("cartpole-replay-std\t"+str(np.std(t))+"\n")
+			file_test.write("cartpole-replay-mean\t"+str(np.mean(t))+"\n")
+	else:
+		if(args.env=="MountainCar-v0"):
+			file_test.write("mountaincar-linear-std\t"+str(np.std(t))+"\n")
+			file_test.write("mountaincar-linear-mean\t"+str(np.mean(t))+"\n")
+		if(args.env=="CartPole-v0"):	
+			file_test.write("cartpole-linear-std\t"+str(np.std(t))+"\n")
+			file_test.write("cartpole-linear-mean\t"+str(np.mean(t))+"\n")
 
 
 if __name__ == '__main__':
