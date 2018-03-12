@@ -8,12 +8,17 @@ from keras.optimizers import Adam
 from keras.utils import plot_model
 from gym.wrappers import Monitor
 import collections
+
 import time
 import math
 import matplotlib
 matplotlib.use('TkAgg')
 from matplotlib import pyplot as plt
 import os
+from os import listdir
+from os.path import isfile, join
+import shutil
+import pickle
 
 class QNetwork():
 
@@ -30,43 +35,43 @@ class QNetwork():
 			print("Setting up linear network....")
 			self.model = Sequential()
 			# self.model.add(Dense(env.action_space.n, input_dim = env.observation_space.shape[0], activation='linear', kernel_initializer='he_uniform', use_bias = True))
-			self.model.add(Dense(24, input_dim = env.observation_space.shape[0], activation='linear', kernel_initializer='he_uniform',use_bias = True))
-			self.model.add(Dense(env.action_space.n, input_dim = 24, activation='linear', kernel_initializer='he_uniform',use_bias = True))
+			self.model.add(Dense(32, input_dim = env.observation_space.shape[0], activation='linear', kernel_initializer='he_uniform',use_bias = True))
+			self.model.add(Dense(env.action_space.n, input_dim = 32, activation='linear', kernel_initializer='he_uniform',use_bias = True))
 			self.model.compile(optimizer = Adam(lr=self.learning_rate), loss='mse')
-			plot_model(self.model, to_file='graphs/Linear.png', show_shapes = True)
+			# plot_model(self.model, to_file='graphs/Linear.png', show_shapes = True)
 			self.model.summary()
 		
 		elif(deep==True):	
 			print("Setting up DDQN network....")
 			self.model = Sequential()
-			self.model.add(Dense(24, input_dim = env.observation_space.shape[0], activation='relu', kernel_initializer='he_uniform',use_bias = True))
+			self.model.add(Dense(32, input_dim = env.observation_space.shape[0], activation='relu', kernel_initializer='he_uniform',use_bias = True))
 			# self.model.add(BatchNormalization())
-			self.model.add(Dense(24, input_dim = 24,activation='relu', kernel_initializer='he_uniform',use_bias = True))
+			self.model.add(Dense(32, input_dim = 32,activation='relu', kernel_initializer='he_uniform',use_bias = True))
 			# self.model.add(BatchNormalization())
-			# self.model.add(Dropout(0.5))
-			self.model.add(Dense(24, input_dim = 24, activation='relu', kernel_initializer='he_uniform',use_bias = True))
+			self.model.add(Dense(32, input_dim = 32, activation='relu', kernel_initializer='he_uniform',use_bias = True))
 			# self.model.add(BatchNormalization())
-			self.model.add(Dense(env.action_space.n, input_dim = 24, activation='linear', kernel_initializer='he_uniform',use_bias = True))
+			self.model.add(Dense(env.action_space.n, input_dim = 32, activation='linear', kernel_initializer='he_uniform',use_bias = True))
 			print("Q-Network initialized.... :)\n")
 
 			self.model.compile(optimizer = Adam(lr=self.learning_rate), loss='mse')
-			plot_model(self.model, to_file='graphs/DDQN.png', show_shapes = True)
-		
+			# plot_model(self.model, to_file='graphs/DDQN.png', show_shapes = True)
+			self.model.summary()
+
 		elif(duel==True):			
 			print("Setting up Dueling DDQN network....")
 			inp = Input(shape=(env.observation_space.shape[0],))
-			layer_shared1 = Dense(24,activation='relu',kernel_initializer='he_uniform',use_bias = True)(inp)
+			layer_shared1 = Dense(32,activation='relu',kernel_initializer='he_uniform',use_bias = True)(inp)
 			# layer_shared1 = BatchNormalization()(layer_shared1)
-			layer_shared2 = Dense(24,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_shared1)
+			layer_shared2 = Dense(32,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_shared1)
 			# layer_shared2 = BatchNormalization()(layer_shared2)
 			print("Shared layers initialized....")
 
-			layer_v1 = Dense(24,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_shared2)
-			# layer_v1 = BatchNormalization()(layer_v1)
-			layer_a1 = Dense(24,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_shared2)
+			# layer_v1 = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_shared2)
+			# # layer_v1 = BatchNormalization()(layer_v1)
+			# layer_a1 = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_shared2)
 			# layer_a1 = BatchNormalization()(layer_a1)
-			layer_v2 = Dense(1,activation='linear',kernel_initializer='he_uniform',use_bias = True)(layer_v1)
-			layer_a2 = Dense(env.action_space.n,activation='linear',kernel_initializer='he_uniform',use_bias = True)(layer_a1)
+			layer_v2 = Dense(1,activation='linear',kernel_initializer='he_uniform',use_bias = True)(layer_shared2)
+			layer_a2 = Dense(env.action_space.n,activation='linear',kernel_initializer='he_uniform',use_bias = True)(layer_shared2)
 			print("Value and Advantage Layers initialised....")
 
 			layer_mean = Lambda(lambda x: K.mean(x,axis=-1,keepdims=True))(layer_a2)
@@ -84,10 +89,9 @@ class QNetwork():
 			print("Q-function layer initialized.... :)\n")
 
 			self.model = Model(inp, layer_q)
-			# self.model.summary()
+			self.model.summary()
 			self.model.compile(optimizer = Adam(lr=self.learning_rate), loss='mse')
-			plot_model(self.model, to_file='graphs/Duel_DQN.png', show_shapes = True)
-		# elif(space==True):			
+			# plot_model(self.model, to_file='graphs/Duel_DQN.png', show_shapes = True)			
 
 	def save_model_weights(self, suffix):
 		# Helper function to save your model / weights.
@@ -149,7 +153,7 @@ class DQN_Agent():
 	# (4) Create a function to test the Q Network's performance on the environment.
 	# (5) Create a function for Experience Replay.
 
-	def __init__(self, env, replay, deep, duel, render, env_name):
+	def __init__(self, env, replay, deep, duel, render, env_name, save_w):
 
 		# Create an instance of the network itself, as well as the memory.
 		# Here is also a good place to set environmental parameters,
@@ -166,24 +170,24 @@ class DQN_Agent():
 		self.feature_size = env.observation_space.shape[0]
 		self.action_size = env.action_space.n
 		self.discount_factor = 1 	
+		self.save_w = save_w
 
 		if(env_name == "CartPole-v0"):
 			self.discount_factor = 0.99
 		elif(env_name == "MountainCar-v0"):
 			self.discount_factor = 1
 
-		self.train_iters = 100
+		self.train_iters = 1000000
 		self.epsilon = 0.5 																						#HYPERPARAMETER3
 		self.epsilon_min = 0.05																					#HYPERPARAMETER4
 		self.num_episodes = 4000
-		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/100000)										#HYPERPARAMETER5
+		self.epsilon_decay = float((self.epsilon-self.epsilon_min)/150000)										#HYPERPARAMETER5
 		self.update_prediction_net_iters =500 																	#HYPERPARAMETER6
 		self.avg_rew_buf_size_epi = 10 
-		self.save_weights_iters = 10
-		self.save_model_iters = 10 															
+		self.save_weights_iters = 10000
+		self.save_model_iters = 10000
 		self.print_epi = 1 
 		self.print_loss_epi = 50 
-		self.save_vid = int(self.num_episodes/4)
 
 		self.evaluate = 0.0
 
@@ -204,8 +208,8 @@ class DQN_Agent():
 		# If training without experience replay_memory, then you will interact with the environment
 		# in this function, while also updating your network parameters.
 		folder = 'none'
-		train_reward = []
 		test_reward = []
+		train_reward = []
 		curr_episode = 1
 		iters = 1
 		max_reward = 0
@@ -214,31 +218,45 @@ class DQN_Agent():
 		self.burn_in_memory()
 		print("burnin done")	
 
-		
-		# save_episodes=np.around(np.linspace(0,4000,num=50))
-		# self.env = Monitor(self.env,'Videos/',video_callable= lambda episode_id: episode_id in save_episodes, force=True)
+		save_episode_id=np.zeros(1)
+
+		if(self.env_name=="CartPole-v0"):
+			save_episode_id=np.around(np.linspace(0,40000,num=160))
+		elif(self.env_name=="MountainCar-v0"):
+			save_episode_id=np.around(np.linspace(0,self.num_episodes,num=40))
+
+		video_file_path = ''
+		if(self.save_w==True):
+			if(self.duel==True):
+				video_file_path = 'videos/'+str(self.env_name)+'/duel/'
+			elif(self.deep==True):
+				video_file_path = 'videos/'+str(self.env_name)+'/deep/'
+			elif(self.replay==True):
+				video_file_path = 'videos/'+str(self.env_name)+'/replay/'
+			else:
+				video_file_path = 'videos/'+str(self.env_name)+'/linear/'
+
+			self.env = Monitor(self.env,video_file_path,video_callable= lambda episode_id: episode_id in save_episode_id, force=True)
+
 		complete = 0
 		while(iters<self.train_iters): 																			#uncomment for cartpole
-		# for e in range(self.num_episodes):																	#uncomment for mountaincar
+		# for e in range(self.num_episodes):																			#uncomment for mountaincar
 			curr_reward = 0
 			curr_iters = 0
 			curr_state = self.env.reset()
 			curr_state = curr_state.reshape([1,self.feature_size])
 			curr_action = self.epsilon_greedy_policy(self.net.model.predict(curr_state))
-			
-			while(iters<self.train_iters): 																		#uncomment for cartpole
-			# while(True): 																						#uncomment for mountaincar
-				self.env.render()
 
+			while(iters<self.train_iters): 																		#uncomment for cartpole
+			# while(True): 																							#uncomment for mountaincar
+				# self.env.render()
 				if(self.replay==False and self.deep==False and self.duel==False):
 
 					nextstate, reward, is_terminal, _ = self.env.step(curr_action)
 					curr_reward += pow(self.discount_factor,curr_iters)*reward
-					# truth = np.zeros(shape=[1,self.action_size])
 
 					if(is_terminal == True):
 						if(self.env_name == "CartPole-v0"):
-							complete+=1
 							q_target = reward
 							truth = self.net.model.predict(curr_state)
 							truth[0][curr_action] = q_target
@@ -272,26 +290,29 @@ class DQN_Agent():
 
 					# if(iters%self.save_weights_iters==0):
 					# 	self.net.save_model_weights(backup)
-					if(iters%self.save_model_iters==0):
-						if(self.env_name == "CartPole-v0"):
-							self.net.model.save('models/linear/cartpole/'+ str(iters) +'_cp_BN_linear_nrp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-							folder = 'linear/cartpole'
-						elif(self.env_name == "MountainCar-v0"):
-							self.net.model.save('models/linear/mountaincar/'+ str(iters) +'_mc_BN_linear_nrp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-							folder = 'linear/mountaincar'
-				
+					
+					if(self.save_w==True):
+						if(iters%self.save_model_iters==0):
+							with open('data/train_rew_backup.pkl', 'wb') as f:
+								pickle.dump(train_reward, f)
+
+							if(self.env_name == "CartPole-v0"):
+								self.net.model.save('models/linear/cartpole/'+ str(iters) +'_cp_BN_linear_nrp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+								folder = 'linear/cartpole'
+							elif(self.env_name == "MountainCar-v0"):
+								self.net.model.save('models/linear/mountaincar/'+ str(iters) +'_mc_BN_linear_nrp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+								folder = 'linear/mountaincar'
+					
 
 
 				else:
-					
 					nextstate, reward, is_terminal, _ = self.env.step(curr_action)
 					self.replay_mem.append([curr_state,curr_action,reward,nextstate,is_terminal])
 
 					curr_reward += pow(self.discount_factor,curr_iters)*reward
 					if(is_terminal):
-						complete+=1
 						break
-					# print(len(self.replay_mem.experience))
+
 					self.replay_mem.sample_batch()
 					
 					input_state = np.zeros(shape=[len(self.replay_mem.batch),self.feature_size])
@@ -324,34 +345,42 @@ class DQN_Agent():
 					curr_action = nextaction
 
 					iters += 1
+					curr_iters += 1
 
 					# if(iters%self.save_weights_iters==0):
 					# 	self.net.save_model_weights(backup)
 
+
 					if(iters%self.save_model_iters==0):
-						if(self.replay==True):
-							if(self.env_name == "CartPole-v0"):
-								self.net.model.save('models/replay/cartpole/'+ str(iters) +'_cp_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-								folder = 'replay/cartpole'
-							elif(self.env_name == "MountainCar-v0"):
-								self.net.model.save('models/replay/mountaincar/'+ str(iters) +'_mc_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-								folder = 'replay/mountaincar'
+						with open('train_rew_backup.pkl', 'wb') as f:
+							pickle.dump(train_reward, f)
+						
+						self.prediction_net.model.save('backup_model.h5')
+							
+						if(self.save_w==True):
+							if(self.replay==True):
+								if(self.env_name == "CartPole-v0"):
+									self.prediction_net.model.save('models/replay/cartpole/'+ str(iters) +'_cp_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+									folder = 'replay/cartpole'
+								elif(self.env_name == "MountainCar-v0"):
+									self.prediction_net.model.save('models/replay/mountaincar/'+ str(iters) +'_mc_linear_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+									folder = 'replay/mountaincar'
 
-						elif(self.deep==True):
-							if(self.env_name == "CartPole-v0"):
-								self.net.model.save('models/deep/cartpole/'+ str(iters) +'_cp_deep_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-								folder = 'deep/cartpole'
-							elif(self.env_name == "MountainCar-v0"):
-								self.net.model.save('models/deep/mountaincar/'+ str(iters) +'_mc_deep_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-								folder = 'deep/mountaincar'
+							elif(self.deep==True):
+								if(self.env_name == "CartPole-v0"):
+									self.prediction_net.model.save('models/deep/cartpole/'+ str(iters) +'_cp_deep_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+									folder = 'deep/cartpole'
+								elif(self.env_name == "MountainCar-v0"):
+									self.prediction_net.model.save('models/deep/mountaincar/'+ str(iters) +'_mc_deep_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+									folder = 'deep/mountaincar'
 
-						elif(self.duel==True):			
-							if(self.env_name == "CartPole-v0"):
-								self.net.model.save('models/duel/cartpole/'+ str(iters) +'_cp_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-								folder = 'duel/cartpole'
-							elif(self.env_name == "MountainCar-v0"):
-								self.net.model.save('models/deep/mountaincar/'+ str(iters) +'_mc_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
-								folder = 'duel/mountaincar'
+							elif(self.duel==True):			
+								if(self.env_name == "CartPole-v0"):
+									self.prediction_net.model.save('models/duel/cartpole/'+ str(iters) +'_cp_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+									folder = 'duel/cartpole'
+								elif(self.env_name == "MountainCar-v0"):
+									self.prediction_net.model.save('models/duel/mountaincar/'+ str(iters) +'_mc_duel_rp_'+str(self.net.learning_rate)+'_'+str(self.replay_mem.burn_in)+'_'+str(self.replay_mem.memory_size)+'_'+'.h5')
+									folder = 'duel/mountaincar'
 
 				self.epsilon -= self.epsilon_decay
 				self.epsilon = max(self.epsilon, 0.05)
@@ -359,6 +388,7 @@ class DQN_Agent():
 				# if(iters%self.update_prediction_net_iters==0):
 				# 	self.prediction_net.load_model_weights(self.net.model.get_weights())
 				# 	self.net.visualise_weights()
+
 			###end of episode##
 
 			self.prediction_net.load_model_weights(self.net.model.get_weights())
@@ -376,32 +406,46 @@ class DQN_Agent():
 
 			train_reward.append(curr_reward)
 
-		for filename in os.listdir('plots/'+folder):
-			test_reward.append(self.test(20,filename))
+		final_weight_file = 'temp'
+		if(self.save_w==True):
+			for filename in os.listdir('models/'+folder):
+				if(filename!='.DS_Store' and isfile('models/'+join(folder,filename))):
+					final_weight_file = 'models/'+join(folder,filename)
+			
+		print("Train done :)")
 
-		return train_reward, test_reward
-		# return train_reward
+		return train_reward, final_weight_file
 
-	def test(self, epi=200, model_file=None):
+	def test(self, model_file, epi=100):
+
 		# Evaluate the performance of your agent over 100 episodes, by calculating cummulative rewards for the 100 episodes.
 		# Here you need to interact with the environment, irrespective of whether you are using a memory.
 		self.net.load_model(model_file)
-		
-		curr_reward = 0
-		for e in range(epi):																
-			nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
-			curr_reward += reward
-			if(is_terminal):
-				break
-			nextstate = nextstate.reshape([1,self.feature_size])
-			q_nextstate = self.net.model.predict(nextstate)
-			nextaction = self.greedy_policy(q_nextstate)
-			
-			curr_state = nextstate
-			curr_action = nextaction
+		reward_array = np.zeros(epi)
 
-		self.evaluate = float(curr_reward/epi)
-		return float(curr_reward/epi)
+		tot_reward = 0
+		for e in range(epi):	
+			curr_reward = 0															
+			curr_state = self.env.reset()
+			curr_action = np.random.randint(self.action_size)
+			while(True):
+				nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
+				curr_reward += reward
+				if(is_terminal):
+					break
+				nextstate = nextstate.reshape([1,self.feature_size])
+				q_nextstate = self.net.model.predict(nextstate)
+				nextaction = self.greedy_policy(q_nextstate)
+				
+				curr_state = nextstate
+				curr_action = nextaction
+
+			tot_reward += curr_reward
+			reward_array[e] = curr_reward
+
+		self.evaluate = float(tot_reward/epi)
+
+		return float(tot_reward/epi), reward_array
 
 	def burn_in_memory(self):
 		# Initialize your replay memory with a burn_in number of episodes / transitions.
@@ -430,43 +474,16 @@ def parse_arguments():
 	parser.add_argument('--deep',dest='deep',type=bool,default=False)
 	parser.add_argument('--duel',dest='duel',type=bool,default=False)
 	parser.add_argument('--replay',dest='replay',type=bool,default=False)
+	parser.add_argument('--save_model',dest='save_w',type=bool,default=False)
 	return parser.parse_args()
-
-def plot_temp1(env_name, rewards, type_plot, algo):
-	plt.plot(range(0,len([3,4])),[3,4])
-	plt.show()
-	plt.plot(range(0,len(rewards)),rewards)
-	imgname = 'temp.png'
-	if(type_plot == 'train'):
-		imgname = 'train.png'
-	elif(type_plot == 'test'):
-		imgname = 'test.png'
-
-	if(env_name=="CartPole-v0"):
-		if('deep'==algo):
-			plt.savefig('plots/deep/cartpole/'+imgname)
-		if('duel'==algo):
-			plt.savefig('plots/duel/cartpole/'+imgname)
-		if('replay'==algo):
-			plt.savefig('plots/replay/cartpole/'+imgname)
-		else:
-			plt.savefig('plots/linear/cartpole/'+imgname)
-	elif(env_name=="MountainCar-v0"):
-		if('deep'==algo):
-			plt.savefig('plots/deep/mountaincar/'+imgname)
-		if('duel'==algo):
-			plt.savefig('plots/duel/mountaincar/'+imgname)
-		if('replay'==algo):
-			plt.savefig('plots/replay/mountaincar/'+imgname)
-		else:
-			plt.savefig('plots/linear/mountaincar/'+imgname)
 
 def main(args):
 
 	args = parse_arguments()
 	environment_name = args.env
 	env = gym.make(environment_name)
-	
+	save_w = True
+
 	#Setting the session to allow growth, so it doesn't allocate all GPU memory.
 	gpu_ops = tf.GPUOptions(allow_growth=True)
 	config = tf.ConfigProto(gpu_options=gpu_ops)
@@ -476,25 +493,48 @@ def main(args):
 	keras.backend.tensorflow_backend.set_session(sess)
 
 	# You want to create an instance of the DQN_Agent class here, and then train / test it.
-	agent = DQN_Agent(env,args.replay,args.deep,args.duel,args.render,args.env)
-	# train_reward,test_reward = agent.train()
-	train_reward = agent.train()
-	print(train_reward)
+	agent = DQN_Agent(env,args.replay,args.deep,args.duel,args.render,args.env,save_w)
+	train_reward,final_weight_file = agent.train()
+	# print(train_reward,test_reward)
+	
+	if(args.save_model==True):
+		if(environment_name=="CartPole-v0"):
+			if(True==args.deep):
+				with open('data/train_rew_cp_deep.pkl', 'wb') as f:
+					pickle.dump(train_reward, f)
+					agent.net.model.save('data/final_model_cp_deep.h5')
+			elif(True==args.duel):
+				with open('data/train_rew_cp_duel.pkl', 'wb') as f:
+					pickle.dump(train_reward, f)
+					agent.net.model.save('data/final_model_cp_duel.h5')
+			elif(True==args.replay):
+				with open('data/train_rew_cp_replay.pkl', 'wb') as f:
+					pickle.dump(train_reward, f)
+					agent.net.model.save('data/final_model_cp_replay.h5')
+			else:
+				with open('data/train_rew_cp_linear.pkl', 'wb') as f:
+					pickle.dump(train_reward, f)
+					agent.net.model.save('data/final_model_cp_linear.h5')
+		elif(environment_name=="MountainCar-v0"):
+			if(True==args.deep):
+				with open('data/train_rew_mc_deep.pkl', 'wb') as f:
+					pickle.dump(train_reward, f)
+					agent.net.model.save('data/final_model_mc_deep.h5')
+			elif(True==args.duel):
+				with open('data/train_rew_mc_duel.pkl', 'wb') as f:
+					pickle.dump(train_reward, f)
+					agent.net.model.save('data/final_model_mc_duel.h5')
+			elif(True==args.replay):
+				with open('data/train_rew_mc_replay.pkl', 'wb') as f:
+					pickle.dump(train_reward, f)
+					agent.net.model.save('data/final_model_mc_replay.h5')
+			else:
+				with open('data/train_rew_mc_linear.pkl', 'wb') as f:
+					pickle.dump(train_reward, f)
+					agent.net.model.save('data/final_model_mc_linear.h5')
+		
 
-	if(args.deep==True):
-		plot_graph(args.env,train_reward,'train','deep')
-		plot(args.env,test_reward,'test','deep')
-	if(args.duel==True):
-		plot_graph(args.env,train_reward,'train','duel')
-		plot(args.env,test_reward,'test','duel')
-	if(args.replay==True):
-		plot_graph(args.env,train_reward,'train','replay')
-		plot(args.env,test_reward,'test','replay')
-	else:
-		plot_temp1(args.env,train_reward,'train','linear')
-		plot(args.env,test_reward,'test','linear')
-
-	# print(agent.evaluate)
+		print("Data and model saved :)\nNow run DQN_plot.py with same arguments to plot and save mean,std")
 
 
 if __name__ == '__main__':

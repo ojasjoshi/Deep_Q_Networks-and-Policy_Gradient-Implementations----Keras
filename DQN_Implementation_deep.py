@@ -7,6 +7,7 @@ import collections
 import time
 from keras.utils import plot_model
 from keras.layers.normalization import BatchNormalization
+from gym.wrappers import Monitor
 
 class QNetwork():
 
@@ -151,6 +152,7 @@ class DQN_Agent():
 		reward_buf = collections.deque()
 
 		self.burn_in_memory()
+		self.env = Monitor(self.env,'Videos/',video_callable= lambda episode_id: episode_id%1, force=True)
 
 		# while(iters<self.train_iters): 																	#uncomment for cartpole
 		for e in range(self.num_episodes): 																	#uncomment for mountaincar
@@ -162,7 +164,7 @@ class DQN_Agent():
 			# while(iters<self.train_iters): 																#uncomment for cartpole
 			while(True): 																					#uncomment for mountaincar
 				# print(len(self.replay_mem.experience))
-				self.env.render()
+				# self.env.render()
 				nextstate, reward, is_terminal, debug_info = self.env.step(curr_action)
 				self.replay_mem.append([curr_state,curr_action,reward,nextstate,is_terminal])
 
