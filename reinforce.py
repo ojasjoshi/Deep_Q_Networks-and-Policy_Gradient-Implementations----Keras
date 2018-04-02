@@ -203,8 +203,6 @@ def main(args):
     #     model = keras.models.model_from_json(f.read())                                                        # if loading from json without weights
     model = keras.models.load_model(model_config_path,custom_objects={'reinforce_loss': reinforce_loss})        # if loading from my_saved_weights
 
-
-    # TODO: Train the model using REINFORCE and plot the learning curve.
     reinforce_agent = Reinforce(model, lr)
     reinforce_agent.train(env)
 
