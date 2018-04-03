@@ -48,6 +48,7 @@ class Imitation():
         # - a list of states, indexed by time step
         # - a list of actions, indexed by time step
         # - a list of rewards, indexed by time step
+        # TODO: Implement this method.
         states = []
         actions = []
         rewards = []
@@ -146,6 +147,8 @@ def main(args):
     # Create the environment.
     env = gym.make('LunarLander-v2')
     
+    # TODO: Train cloned models using imitation learning, and record their
+    #       performance.
     imitating_agent = Imitation('LunarLander-v2-config.json','LunarLander-v2-weights.h5')
     episodes = 50
     acc = imitating_agent.train(env,episodes,50,render=args.render)

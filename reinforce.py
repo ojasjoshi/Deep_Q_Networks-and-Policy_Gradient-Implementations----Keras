@@ -4,27 +4,37 @@ import numpy as np
 import tensorflow as tf
 import keras
 import gym
-from keras import backend as K
 import math 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from keras import backend as K
 
 from keras.optimizers import Adam
 import random
 from tensorflow.python.ops import math_ops, clip_ops
 from gym.wrappers import Monitor
+import pickle
 
 _EPSILON = 1e-7
 def epsilon():                                                                                      # referenced from tensorflow sourcecode
     return _EPSILON
+
+# def reinforce_loss(y_true, y_pred):                                                                 # referenced from saty
+#     epsilon=tf.convert_to_tensor(_EPSILON,y_pred.dtype.base_dtype)
+
+#     probable_acs=tf.clip_by_value(y_pred,epsilon,1-epsilon)
+#     loss=tf.multiply(y_true,tf.log(probable_acs))#[0*P(0|S),0*P(1|S),G_t*P(2|S),0*P(3|S)]
+#     loss_vector=K.sum(loss,axis=1) #0+0+G_t*P(2|S)+0
+#     loss=tf.reduce_mean(loss_vector)#self explanatory
+#     return -loss
 
 def reinforce_loss(y_true, y_pred):                                                                 # referenced from tensorflow sourcecode
     y_pred = y_pred / math_ops.reduce_sum(y_pred, len(y_pred.get_shape()) - 1, True)
     # manual computation of crossentropy
     epsilon_ = tf.convert_to_tensor(epsilon(), y_pred.dtype.base_dtype)  
     y_pred = clip_ops.clip_by_value(y_pred, epsilon_, 1. - epsilon_)                                # clip so that not a log of zero                      
-    return -math_ops.reduce_mean(y_true * math_ops.log(y_pred), axis=len(y_pred.get_shape()) - 1)
+    return -4*math_ops.reduce_mean(y_true * math_ops.log(y_pred), axis=len(y_pred.get_shape()) - 1)
 
 class Reinforce(object):
     # Implementation of the policy gradient method REINFORCE.
@@ -32,7 +42,7 @@ class Reinforce(object):
     def __init__(self, model, lr):
         self.model = model
         self.learning_rate = lr
-        self.model.compile(optimizer = Adam(lr=self.learning_rate), loss=reinforce_loss, metrics=['acc'])
+        self.model.compile(optimizer = Adam(lr=self.learning_rate), loss=reinforce_loss)
 
         self.test_interval = 500
         self.save_model_interval = 500                                                                                             #reduced
@@ -58,36 +68,43 @@ class Reinforce(object):
 
     def train(self, env, gamma=1.0):
         # Trains the model on a single episode using REINFORCE.
+        std_list = []
+        mean_list = []
 
-        acc = 0
-        num_episodes = 100000
+        num_episodes = 50000
 
-        save_episode_id=np.around(np.linspace(0,num_episodes,num=500))
+        save_episode_id=np.around(np.linspace(0,num_episodes,num=100))
         env = Monitor(env,'reinforce/videos/',video_callable= lambda episode_id: episode_id in save_episode_id, force=True)
 
         current_episode = 0
-        while(current_episode<num_episodes):
+        while(current_episode<=num_episodes):
             #Generate episode as current training batch
 
             states,actions,rewards,num_steps = self.run_model(env)                                                              #actions are already one-hot
             current_batch_size = len(states)
+            # print("Current Training Reward:",Reinforce.G_t(rewards,gamma)[0])
             actions = list(map(self.scale_shit,list(zip(actions,Reinforce.G_t(rewards,gamma)))))                                #potential problem
             history = self.model.fit(np.vstack(states),np.asarray(actions),epochs=1,verbose=0,batch_size=current_batch_size)
-            acc = history.history['acc']
             loss = history.history['loss']
+            # print(loss)
 
             if(current_episode%100==0):
                 print("Episodes: {}, Loss: {}, Number of steps: {}".format(current_episode, loss, num_steps))
             if(current_episode%self.test_interval==0):
                 # self.render_one_episode(env)
-                std,mean = self.test(env)
-                print(self.model.predict(states[0]))
+                std,mean = self.test(env,10)
+                std_list.append(std)
+                mean_list.append(mean)
+                print(self.model.predict(states[len(states)-1]))
                 print("Test Reward Std:{}, Test Mean Reward: {}".format(std,mean))
+                with open('reinforce/trainreward_backup.pkl', 'wb') as f:
+                                pickle.dump((std_list,mean_list), f)
             if(current_episode%self.save_model_interval==0):
                 self.model.save("reinforce/"+"episode_"+str(current_episode))
             current_episode += 1
 
         self.model.save("reinforce/"+"episode_"+str(current_episode))
+        return std_list, mean_list
 
     def render_one_episode(self,env):
         state = env.reset()
@@ -153,6 +170,18 @@ class Reinforce(object):
 
         return np.std(rewards),np.mean(rewards)
 
+def plot_af(data,save_file_name):
+#input: data[0] = list(std), data[1] = list(mean)
+    # x = np.arange(0,50100,500)
+    y = np.asarray(data[1])
+    x = np.arange(0,500*y.shape[0],500)
+    e = np.asarray(data[0])
+    # print(np.squeeze(x).shape, np.squeeze(y).shape, np.squeeze(e).shape)
+    # print(y)
+
+    plt.errorbar(np.squeeze(x), np.squeeze(y), np.squeeze(e), linestyle='None', marker='^')
+    plt.savefig(str(save_file_name), bbox_inches='tight')
+    plt.show()
 
 def parse_arguments():
     # Command-line flags are defined here.
@@ -205,6 +234,11 @@ def main(args):
 
     reinforce_agent = Reinforce(model, lr)
     reinforce_agent.train(env)
+
+    with open('reinforce/trainreward_backup.pkl', 'r') as f:
+        data = pickle.load(f)
+    plot_af(data,'reinforce_train.png')
+
 
 if __name__ == '__main__':
     main(sys.argv)

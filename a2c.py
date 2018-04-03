@@ -8,6 +8,7 @@ import gym
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from keras import backend as K
 
 from keras.layers import Dense, Activation, Dropout, Input, Lambda, Add, Subtract
 from keras.models import Sequential, Model
@@ -17,9 +18,16 @@ import random
 from gym.wrappers import Monitor
 import operator
 import math
+import pickle
 
+#reinforce.py required in the same directory
 from reinforce import Reinforce
-from reinforce import reinforce_loss
+from reinforce import reinforce_loss as actor_loss
+from reinforce import plot_af
+
+# reference for a badass critic loss
+def critic_loss(y_true, y_pred):                                                                                                                     # referenced from tensorflow sourcecode
+  return K.mean(K.square(y_pred - y_true), axis=-1)
 
 class A2C(Reinforce):
     # Implementation of N-step Advantage Actor Critic. (this class inherits the Reinforce class)
@@ -32,21 +40,22 @@ class A2C(Reinforce):
         # - critic_model: The critic model.
         # - critic_lr: Learning rate for the critic model.
         # - n: The value of N in N-step A2C.
-        super(A2C,self).__init__(model,lr)
+        super(A2C,self).__init__(model,lr)                                                                                                            # hmmmm
         self.model = model
         self.critic_model = critic_model                                                                                                              # same as actor model for now (with (1,) output)
         self.learning_rate = lr
         self.critic_learning_rate = critic_lr
         self.n = n
   
-        self.model.compile(optimizer = Adam(lr=self.learning_rate), loss=reinforce_loss, metrics=['acc'])
-        self.critic_model.compile(optimizer = Adam(lr=self.critic_learning_rate), loss='mse', metrics=['acc'])                                        # 'mse' **hazardous** potential problem because batch doesnt take average
+        self.model.compile(optimizer = Adam(lr=self.learning_rate), loss=actor_loss, metrics=['acc'])
+        self.critic_model.compile(optimizer = Adam(lr=self.critic_learning_rate), loss=critic_loss, metrics=['acc'])                                        # 'mse' **hazardous** potential problem because batch doesnt take average
 
 
     def V_t(self,states):
         val_preds = [self.critic_model.predict(states[t])[0] for t in range(len(states))]
         return val_preds
 
+    # not dp af for large values of self.n
     def R_t_util(self, rewards, t, T, gamma=1.0):
         ret = 0
         for k in range(self.n):
@@ -68,14 +77,16 @@ class A2C(Reinforce):
 
     def train(self, env, gamma=1.0):
         # Trains the model on a single episode using A2C.
+        std_list = []
+        mean_list = []
 
         num_episodes = 50000
 
-        save_episode_id=np.around(np.linspace(0,num_episodes,num=500))
+        save_episode_id=np.around(np.linspace(0,num_episodes,num=100))
         env = Monitor(env,'A2C/videos/',video_callable= lambda episode_id: episode_id in save_episode_id, force=True)
 
         current_episode = 0
-        while(current_episode<num_episodes):
+        while(current_episode<=num_episodes):
             #Generate episode as current training batch
             states,actions,rewards,num_steps = super(A2C,self).run_model(env)                                                                         # actions are already one-hot
             current_batch_size = len(states)
@@ -104,8 +115,12 @@ class A2C(Reinforce):
             if(current_episode%self.test_interval==0):
                 # self.render_one_episode(env)
                 std,mean = super(A2C,self).test(env)
-                print(self.model.predict(states[0]))
+                std_list.append(std)
+                mean_list.append(mean)
+                print(self.model.predict(states[len(states)-1]))
                 print("Test Reward Std:{}, Test Mean Reward: {}".format(std,mean))
+                with open('A2C/trainreward_backup.pkl', 'wb') as f:
+                                pickle.dump((std_list,mean_list), f)
             if(current_episode%self.save_model_interval==0):
                 self.model.save("A2C/actor/"+"episode_"+str(current_episode))
                 self.critic_model.save("A2C/critic/"+"episode_"+str(current_episode))
@@ -113,6 +128,7 @@ class A2C(Reinforce):
 
         self.model.save("A2C/actor/"+"episode_"+str(current_episode))
         self.critic_model.save("A2C/critic/"+"episode_"+str(current_episode))
+        return std_list, mean_list
 
 
 def parse_arguments():
@@ -122,7 +138,7 @@ def parse_arguments():
                         type=str, default='LunarLander-v2-config.json',
                         help="Path to the actor model config file.")
     parser.add_argument('--model-config-path_critic', dest='model_config_path_critic',
-                        type=str, default='LunarLander-v2-config.json',
+                        type=str, default='',
                         help="Path to the actor model config file.")
     parser.add_argument('--num-episodes', dest='num_episodes', type=int,
                         default=50000, help="Number of episodes to train on.")
@@ -176,14 +192,17 @@ def main(args):
     # plot_model(critic_model, to_file='critic_model.png', show_shapes = True)           
     # critic_model.summary()
 
-    
     ## loading saved models
-    # model = keras.models.load_model(model_config_path_actor,custom_objects={'reinforce_loss': reinforce_loss})        # if loading from my_saved_weights
-    # critic_model = keras.models.load_model(model_config_path_critic)                                                   # if loading from my_saved_weights
+    # model = keras.models.load_model(model_config_path_actor,custom_objects={'actor_loss': actor_loss})        # if loading from my_saved_weights
+    # critic_model = keras.models.load_model(model_config_path_critic,custom_objects={'actor_loss': actor_loss})                                                   # if loading from my_saved_weights
 
-    # TODO: Train the model using A2C and plot the learning curves.
     A2C_agent = A2C(model,lr,critic_model,critic_lr,n)
     A2C_agent.train(env)
+
+    # plot training 
+    with open('A2C/trainreward_backup.pkl', 'r') as f:
+        data = pickle.load(f)
+    plot_af(data,'A2C_train.png')
 
 if __name__ == '__main__':
     main(sys.argv)
