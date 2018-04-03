@@ -1,4 +1,5 @@
-Code Implementation by Ojas Joshi(oyj), Ayush Raina (araina)
+(last update: 03.13.2018)
+Code Implementation by Ojas Joshi(oyj)
 
 The folder contains 2 functions.
 
