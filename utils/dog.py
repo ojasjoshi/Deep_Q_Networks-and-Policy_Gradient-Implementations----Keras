@@ -2,11 +2,12 @@ import pickle
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from merge_pickle import merge_af
 
 import sys
-sys.path.append("..")
+sys.path.append("../")
 from reinforce import plot_af
-from merge_pickle import merge_af
+
 
 mypath = 'pickle_files/' 						#default path
 
