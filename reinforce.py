@@ -20,21 +20,13 @@ _EPSILON = 1e-7
 def epsilon():                                                                                      # referenced from tensorflow sourcecode
     return _EPSILON
 
-# def reinforce_loss(y_true, y_pred):                                                                 # referenced from saty
-#     epsilon=tf.convert_to_tensor(_EPSILON,y_pred.dtype.base_dtype)
-
-#     probable_acs=tf.clip_by_value(y_pred,epsilon,1-epsilon)
-#     loss=tf.multiply(y_true,tf.log(probable_acs))#[0*P(0|S),0*P(1|S),G_t*P(2|S),0*P(3|S)]
-#     loss_vector=K.sum(loss,axis=1) #0+0+G_t*P(2|S)+0
-#     loss=tf.reduce_mean(loss_vector)#self explanatory
-#     return -loss
-
 def reinforce_loss(y_true, y_pred):                                                                 # referenced from tensorflow sourcecode
     y_pred = y_pred / math_ops.reduce_sum(y_pred, len(y_pred.get_shape()) - 1, True)
     # manual computation of crossentropy
     epsilon_ = tf.convert_to_tensor(epsilon(), y_pred.dtype.base_dtype)  
     y_pred = clip_ops.clip_by_value(y_pred, epsilon_, 1. - epsilon_)                                # clip so that not a log of zero                      
-    return -4*math_ops.reduce_mean(y_true * math_ops.log(y_pred), axis=len(y_pred.get_shape()) - 1)
+
+    return -tf.reduce_mean(K.sum(tf.multiply(y_true,tf.log(y_pred)),axis=1))
 
 class Reinforce(object):
     # Implementation of the policy gradient method REINFORCE.

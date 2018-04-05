@@ -186,6 +186,8 @@ def main(args):
     layer_dense = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(inp)
     layer_dense = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense)
     layer_dense = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense)
+    layer_dense = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense)
+    layer_dense = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense)
     layer_v = Dense(1,activation='linear',kernel_initializer='he_uniform',use_bias = True)(layer_dense)
 
     critic_model = Model(inp, layer_v)
