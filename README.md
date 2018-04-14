@@ -1,6 +1,4 @@
-Updated 04.14.2018
-
-Code Implementation by Ojas Joshi(oyj)
+Updated 04.14.2018 - Code Implementation by Ojas Joshi(oyj)
 
 --- DQN/Dueling network(MountainCar-v0/CartPole-v0)
 
