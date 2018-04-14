@@ -1,5 +1,8 @@
 Updated 04.14.2018 - Code Implementation by Ojas Joshi(oyj)
 
+
+
+
 --- DQN/Dueling network(MountainCar-v0/CartPole-v0)
 
 DQN.py
@@ -52,6 +55,9 @@ TESTING
 
 -- DQN_plot.py
 After running DQN.py, run >python3 DQN_plot.py with the exact arguments to plot the training and testing plots and the mean and standard deviation of the final test run. The results of the final test run are stored in test_final.txt in the main directory.
+
+
+
 
 
 ---- Policy Gradient (LunarLander-v0): 
