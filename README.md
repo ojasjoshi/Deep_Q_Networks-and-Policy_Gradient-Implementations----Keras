@@ -1,10 +1,62 @@
-1) General:
--Videos for trained policies are in videos directory.
--imitation.py, reinforce.py and a2c.py are implementations for question 1,2 & 3 respectively.
--utils folder has some utility function used while solving the homework
+Updated 04.14.2018
+
+Code Implementation by Ojas Joshi(oyj)
+
+--- DQN/Dueling network(MountainCar-v0/CartPole-v0)
+
+DQN.py
+The function contains 6 important parameters that can be tweaked according the model requirements.
+
+TRAINING
+Following arguments are required while calling the function:
+
+a) Linear QNetwork: 
+> python3 DQN.py --env "environment_name" 
+
+b) Linear Replay QNetwork:
+> python3 DQN.py --env "environment_name" --replay True 
+
+c) Deep QNetwork:
+> python3 DQN.py --env "environment_name" --deep True 
+
+d) Duel QNetwork:
+> python3 DQN.py --env "environment_name" --duel True
+
+For rendering the environment, --render True can be used. A backup model is saved every 10000 iterations in the main directory.
+In order to save the weights,videos and plots during training, following directory structure must be used for the code to work. In addition, save_w on line 495 should be set to True.
+
+main_dir
+|	models
+		|deep
+			|cartpole,mountaincar
+		|duel
+			|cartpole,mountaincar
+		|linear
+			|cartpole,mountaincar
+		|replay
+			|cartpole,mountaincar
+|	plots
+		|deep
+			|cartpole,mountaincar
+		|duel
+			|cartpole,mountaincar
+		|linear
+			|cartpole,mountaincar
+		|replay
+			|cartpole,mountaincar
+| 	graphs
+|	data
+|	videos	
+
+TESTING
+
+>python3 DQN.py --env "environment_name" --deep/--duel/--replay True --model "<path-to-model-file>" --train False
+
+-- DQN_plot.py
+After running DQN.py, run >python3 DQN_plot.py with the exact arguments to plot the training and testing plots and the mean and standard deviation of the final test run. The results of the final test run are stored in test_final.txt in the main directory.
 
 
-2) Running the code:
+---- Policy Gradient (LunarLander-v0): 
 
 -Before training:
 
