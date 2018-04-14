@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from keras import backend as K
 
 from keras.layers import Dense, Activation, Dropout, Input, Lambda, Add, Subtract
+from keras.layers.normalization import BatchNormalization
 from keras.models import Sequential, Model
 from keras.utils import plot_model
 from keras.optimizers import Adam
@@ -32,7 +33,7 @@ def critic_loss(y_true, y_pred):                                                
 class A2C(Reinforce):
     # Implementation of N-step Advantage Actor Critic. (this class inherits the Reinforce class)
 
-    def __init__(self, model, lr, critic_model, critic_lr, n=20):
+    def __init__(self, model, lr, critic_model, critic_lr, n=20, gamma=0.995):
         # Initializes A2C.
         # Args:
         # - model: The actor model.
@@ -48,6 +49,7 @@ class A2C(Reinforce):
         self.n = n
         self.update_actor_model_interval_1 = 5
         self.update_actor_model_interval_2 = 1
+        self.gamma = 0.995
 
         self.model.compile(optimizer = Adam(lr=self.learning_rate), loss=reinforce_loss, metrics=['acc'])
         self.critic_model.compile(optimizer = Adam(lr=self.critic_learning_rate), loss=critic_loss, metrics=['acc'])                                        # 'mse' **hazardous** potential problem because batch doesnt take average
@@ -58,14 +60,14 @@ class A2C(Reinforce):
         return val_preds
 
     # not dp af for large values of self.n
-    def R_t_util(self, rewards, t, T, gamma=1.0):
+    def R_t_util(self, rewards, t, T, gamma=0.995):
         ret = 0
         for k in range(self.n):
             if(t+k<T):
                 ret += pow(gamma,k)*rewards[t+k]
         return ret
 
-    def R_t(self, rewards, value_preds, gamma=1.0):                                                                                                    # not static because need 'n'
+    def R_t(self, rewards, value_preds, gamma=0.995):                                                                                                    # not static because need 'n'
         updated_rewards = []
         T = len(rewards)
         N = self.n
@@ -77,8 +79,9 @@ class A2C(Reinforce):
             updated_rewards.append(rt)
         return list(reversed(updated_rewards))
 
-    def train(self, env, gamma=1.0):
+    def train(self, env, gamma=0.995):
         # Trains the model on a single episode using A2C.
+        print("TD(",self.n,")")
         std_list = []
         mean_list = []
 
@@ -133,8 +136,6 @@ class A2C(Reinforce):
         self.critic_model.save("A2C/critic/final")
         return std_list, mean_list
 
-    def test_trained_policy(self, model, env, num_episodes=100, render=False):
-        return super(A2C,self).test_trained_policy(model,env)
 
 def parse_arguments():
     # Command-line flags are defined here.
@@ -145,9 +146,6 @@ def parse_arguments():
     parser.add_argument('--model-config-path_critic', dest='model_config_path_critic',
                         type=str, default='',
                         help="Path to the actor model config file.")
-    parser.add_argument('--model-config-path_trained', dest='model_config_path_trained',
-                        type=str, default='',
-                        help="Path to the model config file.")
     parser.add_argument('--num-episodes', dest='num_episodes', type=int,
                         default=50000, help="Number of episodes to train on.")
     parser.add_argument('--lr', dest='lr', type=float,
@@ -185,17 +183,33 @@ def main(args):
     env = gym.make('LunarLander-v2')
 
     # Load the actor model from file.
-    with open(model_config_path_actor, 'r') as f:
-        model = keras.models.model_from_json(f.read())
+    # with open(model_config_path_actor, 'r') as f:
+        # model = keras.models.model_from_json(f.read())
     # plot_model(model, to_file='actor_model.png', show_shapes = True)           
+
+    inp_m = Input(shape=(env.observation_space.shape[0],))
+    layer_dense_m = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(inp_m)
+    layer_dense_m = BatchNormalization()(layer_dense_m)
+    layer_dense_m = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense_m)
+    layer_dense_m = BatchNormalization()(layer_dense_m)
+    layer_dense_m = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense_m)
+    layer_dense_m = BatchNormalization()(layer_dense_m)
+    layer_v_m = Dense(env.action_space.n,activation='softmax',kernel_initializer='he_uniform',use_bias = True)(layer_dense_m)
+
+    model = Model(inp_m, layer_v_m)
 
     # Critic Model
     inp = Input(shape=(env.observation_space.shape[0],))
     layer_dense = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(inp)
+    layer_dense = BatchNormalization()(layer_dense)
     layer_dense = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense)
+    layer_dense = BatchNormalization()(layer_dense)
     layer_dense = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense)
+    layer_dense = BatchNormalization()(layer_dense)
     layer_dense = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense)
+    layer_dense = BatchNormalization()(layer_dense)
     layer_dense = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense)
+    layer_dense = BatchNormalization()(layer_dense)
     layer_v = Dense(1,activation='linear',kernel_initializer='he_uniform',use_bias = True)(layer_dense)
 
     critic_model = Model(inp, layer_v)
@@ -209,15 +223,10 @@ def main(args):
     A2C_agent = A2C(model,lr,critic_model,critic_lr,n)
     A2C_agent.train(env)
 
-    ## want to test a trained model??
-    # trained_model = keras.models.load_model(args.model_config_path_trained,custom_objects={'reinforce_loss': reinforce_loss})
-    # trained_std, trained_mean = A2C_agent.test_trained_policy(trained_model,env)
-    # print(trained_std, trained_mean)
-
     # plot training 
-    # with open('A2C/trainreward_backup.pkl', 'r') as f:
-        # data = pickle.load(f)
-    # plot_af(data,'A2C_train.png')  
+    with open('A2C/trainreward_backup.pkl', 'r') as f:
+        data = pickle.load(f)
+    plot_af(data,'A2C_train.png')
 
 if __name__ == '__main__':
     main(sys.argv)

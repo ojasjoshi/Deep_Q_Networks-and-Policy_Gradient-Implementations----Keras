@@ -43,13 +43,9 @@ class Reinforce(object):
         # Generates an episode by running the cloned policy on the given env.
         return self.generate_episode(self.model, env, type_run, render)
 
-    def run_trained_model(self, model, env, type_run='train',render=False):
-        # Generates an episode by running the cloned policy on the given env.
-        return self.generate_episode(model, env, type_run, render)
-
     #dp af
     @staticmethod
-    def G_t(rewards,gamma=1):       
+    def G_t(rewards,gamma=0.995):       
         updated_rewards = [0]
         current_index = 1
         for t in range(len(rewards)-1,-1,-1):
@@ -62,14 +58,12 @@ class Reinforce(object):
     def scale_shit(self,tup):
         return tup[0]*tup[1]                                                                                            
 
-    def train(self, env, gamma=1.0, render=False):
+    def train(self, env, gamma=0.995):
         # Trains the model on a single episode using REINFORCE.
         std_list = []
         mean_list = []
 
         num_episodes = 50000
-
-        # saving videos of training every 100 episodes
 
         # save_episode_id=np.around(np.linspace(0,num_episodes,num=100))
         # env = Monitor(env,'reinforce/videos/',video_callable= lambda episode_id: episode_id in save_episode_id, force=True)
@@ -78,10 +72,10 @@ class Reinforce(object):
         while(current_episode<=num_episodes):
             #Generate episode as current training batch
 
-            states,actions,rewards,num_steps = self.run_model(env, render)                                                              #actions are already one-hot
+            states,actions,rewards,num_steps = self.run_model(env)                                                              #actions are already one-hot
             current_batch_size = len(states)
             # print("Current Training Reward:",Reinforce.G_t(rewards,gamma)[0])
-            actions = list(map(self.scale_shit,list(zip(actions,Reinforce.G_t(rewards,gamma)))))                                        #potential problem
+            actions = list(map(self.scale_shit,list(zip(actions,Reinforce.G_t(rewards,gamma)))))                                #potential problem
             history = self.model.fit(np.vstack(states),np.asarray(actions),epochs=1,verbose=0,batch_size=current_batch_size)
             loss = history.history['loss']
             # print(loss)
@@ -90,7 +84,7 @@ class Reinforce(object):
                 print("Episodes: {}, Loss: {}, Number of steps: {}".format(current_episode, loss, num_steps))
             if(current_episode%self.test_interval==0):
                 # self.render_one_episode(env)
-                std,mean = self.test(env, render)
+                std,mean = self.test(env,10)
                 std_list.append(std)
                 mean_list.append(mean)
                 print(self.model.predict(states[len(states)-1]))
@@ -106,11 +100,10 @@ class Reinforce(object):
 
     def render_one_episode(self,env):
         state = env.reset()
-        state = state.reshape([1,env.observation_space.shape[0]])
-        # action = np.random.randint(env.action_space.n)
-        action = np.random.choice(env.action_space.n,1,p=self.model.predict(state).flatten())[0]
+        action = np.random.randint(env.action_space.n)
         while(True):
             env.render()
+            state = state.reshape([1,env.observation_space.shape[0]])
             nextstate, reward, is_terminal, _ = env.step(action)
             if(is_terminal == True):
                 break                            
@@ -169,19 +162,6 @@ class Reinforce(object):
 
         return np.std(rewards),np.mean(rewards)
 
-    def test_trained_policy(self, model, env, num_episodes=100, render=False):
-        current_episode = 0
-        rewards = []
-        while(current_episode<num_episodes):
-            print("Testing Episode: ", current_episode)
-            if(render==True):
-                env.render()
-            _,_,r,_ = self.run_trained_model(model, env,'test',render)
-            rewards.append(np.sum(r))
-            current_episode +=1        
-
-        return np.std(rewards),np.mean(rewards)
-
 def plot_af(data,save_file_name):
 #input: data[0] = list(std), data[1] = list(mean)
     # x = np.arange(0,50100,500)
@@ -200,9 +180,6 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model-config-path', dest='model_config_path',
                         type=str, default='LunarLander-v2-config.json',
-                        help="Path to the model config file.")
-    parser.add_argument('--model-config-path_trained', dest='model_config_path_trained',
-                        type=str, default='',
                         help="Path to the model config file.")
     parser.add_argument('--num-episodes', dest='num_episodes', type=int,
                         default=50000, help="Number of episodes to train on.")
@@ -239,18 +216,16 @@ def main(args):
 
     # Create the environment.
     env = gym.make('LunarLander-v2')
+    
+    ######## save and load as json later#########
 
-    ## Load the policy model from file. 
+    # Load the policy model from file. 
     with open(model_config_path, 'r') as f:        
-        model = keras.models.model_from_json(f.read())                                                            # if loading from json without weights
+        model = keras.models.model_from_json(f.read())                                                        # if loading from json without weights
     # model = keras.models.load_model(model_config_path,custom_objects={'reinforce_loss': reinforce_loss})        # if loading from my_saved_weights
 
     reinforce_agent = Reinforce(model, lr)
     reinforce_agent.train(env)
-
-    ## want to test a trained model??
-    # trained_model = keras.models.load_model(args.model_config_path_trained,custom_objects={'reinforce_loss': reinforce_loss})
-    # trained_std, trained_mean = reinforce_agent.test_trained_policy(trained_model,env)
 
     with open('reinforce/trainreward_backup.pkl', 'r') as f:
         data = pickle.load(f)

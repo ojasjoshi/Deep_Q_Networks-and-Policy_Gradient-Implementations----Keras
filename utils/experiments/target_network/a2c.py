@@ -32,7 +32,7 @@ def critic_loss(y_true, y_pred):                                                
 class A2C(Reinforce):
     # Implementation of N-step Advantage Actor Critic. (this class inherits the Reinforce class)
 
-    def __init__(self, model, lr, critic_model, critic_lr, n=20):
+    def __init__(self, model, lr, critic_model, critic_lr, n=20, gamma=0.995):
         # Initializes A2C.
         # Args:
         # - model: The actor model.
@@ -42,30 +42,34 @@ class A2C(Reinforce):
         # - n: The value of N in N-step A2C.
         super(A2C,self).__init__(model,lr)                                                                                                            # hmmmm
         self.model = model
+        self.target_model = model
         self.critic_model = critic_model                                                                                                              # same as actor model for now (with (1,) output)
+        self.target_critic_model = critic_model
         self.learning_rate = lr
         self.critic_learning_rate = critic_lr
         self.n = n
-        self.update_actor_model_interval_1 = 5
+        self.update_actor_model_interval_1 = 1
         self.update_actor_model_interval_2 = 1
-
+        self.gamma = 0.995
+        self.update_target = 2
         self.model.compile(optimizer = Adam(lr=self.learning_rate), loss=reinforce_loss, metrics=['acc'])
+        self.target_model.compile(optimizer = Adam(lr=self.learning_rate), loss=reinforce_loss, metrics=['acc'])
         self.critic_model.compile(optimizer = Adam(lr=self.critic_learning_rate), loss=critic_loss, metrics=['acc'])                                        # 'mse' **hazardous** potential problem because batch doesnt take average
-
+        self.target_critic_model.compile(optimizer = Adam(lr=self.critic_learning_rate), loss=critic_loss, metrics=['acc'])                                       
 
     def V_t(self,states):
-        val_preds = [self.critic_model.predict(states[t])[0] for t in range(len(states))]
+        val_preds = [self.target_critic_model.predict(states[t])[0] for t in range(len(states))]
         return val_preds
 
     # not dp af for large values of self.n
-    def R_t_util(self, rewards, t, T, gamma=1.0):
+    def R_t_util(self, rewards, t, T, gamma=0.995):
         ret = 0
         for k in range(self.n):
             if(t+k<T):
                 ret += pow(gamma,k)*rewards[t+k]
         return ret
 
-    def R_t(self, rewards, value_preds, gamma=1.0):                                                                                                    # not static because need 'n'
+    def R_t(self, rewards, value_preds, gamma=0.995):                                                                                                    # not static because need 'n'
         updated_rewards = []
         T = len(rewards)
         N = self.n
@@ -77,8 +81,9 @@ class A2C(Reinforce):
             updated_rewards.append(rt)
         return list(reversed(updated_rewards))
 
-    def train(self, env, gamma=1.0):
+    def train(self, env, gamma=0.995):
         # Trains the model on a single episode using A2C.
+        print("TD(",self.n,")")
         std_list = []
         mean_list = []
 
@@ -109,7 +114,7 @@ class A2C(Reinforce):
                 loss_actor = history_actor.history['loss']
 
             #backprop critique model
-            history_critic = self.critic_model.fit(np.vstack(states),np.asarray(updated_rewards),epochs=1,verbose=0,batch_size=current_batch_size)
+            history_critic = self.critic_model.fit(np.vstack(states),np.asarray(updated_rewards),epochs=5,verbose=0,batch_size=current_batch_size)
             acc_critic = history_critic.history['acc']
             loss_critic = history_critic.history['loss']
 
@@ -129,12 +134,14 @@ class A2C(Reinforce):
                 self.critic_model.save("A2C/critic/latest")
             current_episode += 1
 
+            if(current_episode%self.update_target==0):
+                self.target_model.set_weights(self.model.get_weights())
+                self.target_critic_model.set_weights(self.critic_model.get_weights())
+
         self.model.save("A2C/actor/final")
         self.critic_model.save("A2C/critic/final")
         return std_list, mean_list
 
-    def test_trained_policy(self, model, env, num_episodes=100, render=False):
-        return super(A2C,self).test_trained_policy(model,env)
 
 def parse_arguments():
     # Command-line flags are defined here.
@@ -145,9 +152,6 @@ def parse_arguments():
     parser.add_argument('--model-config-path_critic', dest='model_config_path_critic',
                         type=str, default='',
                         help="Path to the actor model config file.")
-    parser.add_argument('--model-config-path_trained', dest='model_config_path_trained',
-                        type=str, default='',
-                        help="Path to the model config file.")
     parser.add_argument('--num-episodes', dest='num_episodes', type=int,
                         default=50000, help="Number of episodes to train on.")
     parser.add_argument('--lr', dest='lr', type=float,
@@ -209,15 +213,10 @@ def main(args):
     A2C_agent = A2C(model,lr,critic_model,critic_lr,n)
     A2C_agent.train(env)
 
-    ## want to test a trained model??
-    # trained_model = keras.models.load_model(args.model_config_path_trained,custom_objects={'reinforce_loss': reinforce_loss})
-    # trained_std, trained_mean = A2C_agent.test_trained_policy(trained_model,env)
-    # print(trained_std, trained_mean)
-
     # plot training 
-    # with open('A2C/trainreward_backup.pkl', 'r') as f:
-        # data = pickle.load(f)
-    # plot_af(data,'A2C_train.png')  
+    with open('A2C/trainreward_backup.pkl', 'r') as f:
+        data = pickle.load(f)
+    plot_af(data,'A2C_train.png')
 
 if __name__ == '__main__':
     main(sys.argv)

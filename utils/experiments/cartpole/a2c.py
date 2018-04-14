@@ -10,7 +10,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from keras import backend as K
 
-from keras.layers import Dense, Activation, Dropout, Input, Lambda, Add, Subtract
+from keras.layers import Dense, Activation, Dropout, Input, Lambda, Add, Subtract, Softmax
 from keras.models import Sequential, Model
 from keras.utils import plot_model
 from keras.optimizers import Adam
@@ -79,10 +79,11 @@ class A2C(Reinforce):
 
     def train(self, env, gamma=1.0):
         # Trains the model on a single episode using A2C.
+        print("TD(",self.n,")")
         std_list = []
         mean_list = []
 
-        num_episodes = 75000
+        num_episodes = 50000
 
         # save_episode_id=np.around(np.linspace(0,num_episodes,num=100))
         # env = Monitor(env,'A2C/videos/',video_callable= lambda episode_id: episode_id in save_episode_id, force=True)
@@ -96,7 +97,7 @@ class A2C(Reinforce):
             value_predictions = self.V_t(states)
             updated_rewards = self.R_t(rewards,value_predictions,gamma)
 
-            if(current_episode<10000):
+            if(current_episode<1000):
                 actor_interval = self.update_actor_model_interval_1
             else:
                 actor_interval = self.update_actor_model_interval_2
@@ -133,8 +134,6 @@ class A2C(Reinforce):
         self.critic_model.save("A2C/critic/final")
         return std_list, mean_list
 
-    def test_trained_policy(self, model, env, num_episodes=100, render=False):
-        return super(A2C,self).test_trained_policy(model,env)
 
 def parse_arguments():
     # Command-line flags are defined here.
@@ -145,9 +144,6 @@ def parse_arguments():
     parser.add_argument('--model-config-path_critic', dest='model_config_path_critic',
                         type=str, default='',
                         help="Path to the actor model config file.")
-    parser.add_argument('--model-config-path_trained', dest='model_config_path_trained',
-                        type=str, default='',
-                        help="Path to the model config file.")
     parser.add_argument('--num-episodes', dest='num_episodes', type=int,
                         default=50000, help="Number of episodes to train on.")
     parser.add_argument('--lr', dest='lr', type=float,
@@ -182,12 +178,23 @@ def main(args):
     render = args.render
 
     # Create the environment.
-    env = gym.make('LunarLander-v2')
+    # env = gym.make('LunarLander-v2')
+    env = gym.make('CartPole-v0')
 
     # Load the actor model from file.
-    with open(model_config_path_actor, 'r') as f:
-        model = keras.models.model_from_json(f.read())
+    # with open(model_config_path_actor, 'r') as f:
+    #     model = keras.models.model_from_json(f.read())
     # plot_model(model, to_file='actor_model.png', show_shapes = True)           
+
+    #actor model
+    inp_a = Input(shape=(env.observation_space.shape[0],))
+    layer_dense_a = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(inp_a)
+    layer_dense_a = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense_a)
+    layer_dense_a = Dense(16,activation='relu',kernel_initializer='he_uniform',use_bias = True)(layer_dense_a)
+    layer_a = Dense(env.action_space.n,activation='linear',kernel_initializer='he_uniform',use_bias = True)(layer_dense_a)
+    layer_a_soft = Softmax()(layer_a)
+
+    model = Model(inp_a, layer_a_soft)c
 
     # Critic Model
     inp = Input(shape=(env.observation_space.shape[0],))
@@ -209,15 +216,10 @@ def main(args):
     A2C_agent = A2C(model,lr,critic_model,critic_lr,n)
     A2C_agent.train(env)
 
-    ## want to test a trained model??
-    # trained_model = keras.models.load_model(args.model_config_path_trained,custom_objects={'reinforce_loss': reinforce_loss})
-    # trained_std, trained_mean = A2C_agent.test_trained_policy(trained_model,env)
-    # print(trained_std, trained_mean)
-
     # plot training 
-    # with open('A2C/trainreward_backup.pkl', 'r') as f:
-        # data = pickle.load(f)
-    # plot_af(data,'A2C_train.png')  
+    with open('A2C/trainreward_backup.pkl', 'r') as f:
+        data = pickle.load(f)
+    plot_af(data,'A2C_train.png')
 
 if __name__ == '__main__':
     main(sys.argv)
